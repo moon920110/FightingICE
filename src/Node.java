@@ -23,13 +23,13 @@ public class Node {
   public static final int UCT_TIME = 165 * 100000;
 
   /** Value of C in UCB1 */
-  public static final double UCB_C = 3;
+  public static final double UCB_C = 1.414;
 
   /** Depth of tree search */
-  public static final int UCT_TREE_DEPTH = 2;
+  public static final int UCT_TREE_DEPTH = 3;
 
   /** Threshold for generating a node */
-  public static final int UCT_CREATE_NODE_THRESHOULD = 10;
+  public static final int UCT_CREATE_NODE_THRESHOULD = 20;
 
   /** Time for performing simulation */
   public static final int SIMULATION_TIME = 60;
@@ -151,11 +151,11 @@ public class Node {
       mAction.add(selectedMyActions.get(i));
     }
 
-    for (int i = 0; i < 5 - selectedMyActions.size(); i++) {
+    for (int i = 0; i < 1 - selectedMyActions.size(); i++) {
       mAction.add(myActions.get(rnd.nextInt(myActions.size())));
     }
 
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 1; i++) {// (int i = 0; i < 5; i++) {
       oppAction.add(oppActions.get(rnd.nextInt(oppActions.size())));
     }
 
