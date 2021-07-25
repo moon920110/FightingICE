@@ -45,3 +45,6 @@ debugData
 #intellJ
 /.idea/*
 *.iml
+src/settings
+.vscode
+GAME_LOG
