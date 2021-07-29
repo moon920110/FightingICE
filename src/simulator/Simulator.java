@@ -1,18 +1,17 @@
 package simulator;
 
-import java.util.ArrayList;
-import java.util.Deque;
-import java.util.LinkedList;
+import java.util.*;
 
 import enumerate.Action;
 import fighting.Motion;
+import org.apache.commons.math3.analysis.function.Log;
+import org.dmg.pmml.FieldName;
 import struct.FrameData;
 import struct.GameData;
 
 import struct.CharacterData;
 import enumerate.State;
 import struct.MotionData;
-import java.util.Random;
 
 /**
  * The class of the simulator.
@@ -90,14 +89,14 @@ public class Simulator {
 	 * @return the frame data after the simulation
 	 */
 	public ArrayList<FrameData> simulate(FrameData frameData, boolean playerNumber, Deque<Action> myAct, Deque<Action> oppAct,
-			int simulationLimit, boolean logging) {
+										 int simulationLimit, boolean logging) {
 
 		// Creates deep copy of each action's list
 		LinkedList<Action> myActions = new LinkedList<Action>();
 		LinkedList<Action> oppActions = new LinkedList<Action>();
 		
 		FrameData CurrentSate = frameData;
-		ArrayList<FrameData> LoggedFrameDatas = new ArrayList<FrameData>(simulationLimit);
+		ArrayList<FrameData> LoggedFrameData = new ArrayList<FrameData>(simulationLimit);
 
 		Random rnd = new Random();
 
@@ -110,8 +109,8 @@ public class Simulator {
 		tempActionList.add(tempP2Act);
 
 		ArrayList<ArrayList<Motion>> tempMotionList = new ArrayList<ArrayList<Motion>>(2);
-//		ArrayList<Motion> p1MotionData = this.gameData.getMotion(playerNumber ? true : false);
-//		ArrayList<Motion> p2MotionData = this.gameData.getMotion(!playerNumber ? true : false);
+//		ArrayList<Motion> p1MotionData = this.gameData.getMotion(playerNumber);
+//		ArrayList<Motion> p2MotionData = this.gameData.getMotion(!playerNumber);
 		ArrayList<Motion> p1MotionData = this.gameData.getMotion(true);
 		ArrayList<Motion> p2MotionData = this.gameData.getMotion(false);
 		tempMotionList.add(p1MotionData);
@@ -126,17 +125,17 @@ public class Simulator {
 		int inner_limit = 0;
 		if (logging){
 			for (int i = 0; i < simulationLimit; i++) {
-				//select current avalable actions of player
+				//select current available actions of player
 				CharacterData myCharacter = CurrentSate.getCharacter(playerNumber);
 				ArrayList<MotionData> myMotion = this.gameData.getMotionData(playerNumber);
 				myActions = setMyAction(myActions, myCharacter, myMotion);
 
-				//select current avalable actions of opponent
+				//select current available actions of opponent
 				CharacterData oppCharacter = CurrentSate.getCharacter(!playerNumber);
 				ArrayList<MotionData> oppMotion = this.gameData.getMotionData(!playerNumber);
 				oppActions = setMyAction(oppActions, oppCharacter, oppMotion);
 				
-				//sample a random action from avalable actions, then append it to ActionList
+				//sample a random action from available actions, then append it to ActionList
 				tempActionList.get(0).add(myActions.get(rnd.nextInt(myActions.size())));
 				tempActionList.get(1).add(oppActions.get(rnd.nextInt(oppActions.size())));
 
@@ -144,12 +143,16 @@ public class Simulator {
 				simFighting.initialize(tempMotionList, tempActionList, new FrameData(frameData), playerNumber);
 
 				//simulate until sample all player's actions, or player can move, and the number of steps is less than the simulationLimit
-				while ((tempActionList.get((playerNumber ? 0:1)).size() != 0 || !CurrentSate.getCharacter(playerNumber).isControl())&&(inner_limit<=simulationLimit)){
+				while ((tempActionList.get((playerNumber ? 0 : 1)).size() != 0
+						|| !CurrentSate.getCharacter(playerNumber).isControl())
+						&& inner_limit <= simulationLimit){
 					simFighting.processingFight(nowFrame);
 					//save current state
 					CurrentSate = simFighting.createFrameData(nowFrame, frameData.getRound());
-					LoggedFrameDatas.add(CurrentSate);
-					
+					if (inner_limit % 15 == 0){
+						LoggedFrameData.add(CurrentSate);
+					}
+
 					nowFrame++;
 					inner_limit++;
 				}
@@ -161,16 +164,17 @@ public class Simulator {
 				simFighting.processingFight(nowFrame);
 				nowFrame++;
 			}
-			LoggedFrameDatas.add(simFighting.createFrameData(nowFrame, frameData.getRound()));
+			LoggedFrameData.add(simFighting.createFrameData(nowFrame, frameData.getRound()));
 		}
 
-		return LoggedFrameDatas;
+		return LoggedFrameData;
 	}
 
 	public LinkedList<Action> setMyAction(LinkedList<Action> Actions, CharacterData myCharacter, ArrayList<MotionData> myMotion) {
 		Actions.clear();
 		int energy = myCharacter.getEnergy();
-	
+
+		// get available actions in current situation
 		if (myCharacter.getState() == State.AIR) {
 		  for (int i = 0; i < actionAir.length; i++) {
 			if (Math.abs(myMotion.get(Action.valueOf(actionAir[i].name()).ordinal())

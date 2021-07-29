@@ -48,3 +48,6 @@ debugData
 src/settings
 .vscode
 GAME_LOG
+
+*.pmml
+classes/artifacts/
