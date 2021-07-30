@@ -22,22 +22,34 @@ import java.util.concurrent.TimeUnit;
  */
 public class Node {
 
-    /** UCT execution time */
+    /**
+     * UCT execution time
+     */
     public static final int UCT_TIME = 165 * 1000000; //165 * 100000;
 
-    /** Value of C in UCB1 */
+    /**
+     * Value of C in UCB1
+     */
     public static final double UCB_C = 3;
 
-    /** Depth of tree search */
+    /**
+     * Depth of tree search
+     */
     public static final int UCT_TREE_DEPTH = 3;
 
-    /** Threshold for generating a node */
-    public static final int UCT_CREATE_NODE_THRESHOULD = 4;
+    /**
+     * Threshold for generating a node
+     */
+    public static final int UCT_CREATE_NODE_THRESHOLD = 4;
 
-    /** Time for performing simulation */
+    /**
+     * Time for performing simulation
+     */
     public static final int SIMULATION_TIME = 286;
 
-    /** Use when in need of random numbers */
+    /**
+     * Use when in need of random numbers
+     */
     private Random rnd;
 
     /**
@@ -70,7 +82,7 @@ public class Node {
      */
     private double score;
     private double lastestSimulatedScore;
-    
+
     /**
      * All selectable actions of self AI
      */
@@ -255,7 +267,7 @@ public class Node {
                     if (UCT_CREATE_NODE_THRESHOLD <= selectedNode.games) {
                         selectedNode.createNode();
                         selectedNode.isCreateNode = true;  // for debugging
-                        score = selectedNode.uct();
+                        score = selectedNode.uctSingle();
                     } else {
                         score = selectedNode.playout();
                     }
@@ -264,7 +276,7 @@ public class Node {
                 }
             } else {
                 if (selectedNode.depth < UCT_TREE_DEPTH) {
-                    score = selectedNode.uct();
+                    score = selectedNode.uctSingle();
                 } else {
                     selectedNode.playout();
                 }
@@ -281,67 +293,71 @@ public class Node {
 
         return score;
     }
-    
+
     public double uctMulti() {
 
-      Node selectedNode = null;
-      double bestUcb;
-      bestUcb = -99999;
+        Node selectedNode = null;
+        double bestUcb;
+        bestUcb = -99999;
 
-      for (Node child : this.children) {
-        if (child.games == 0) {
-          child.ucb = 9999 + rnd.nextInt(50);
-        } else {
-          child.ucb = getUcb(child.score / child.games, games, child.games);
-        }
-
-        if (bestUcb < child.ucb) {
-          selectedNode = child;
-          bestUcb = child.ucb;
-        }
-      }
-
-      double score = 0;
-      if (selectedNode.games == 0) {
-        try{
-          score = runWorkers(selectedNode);
-        }catch(InterruptedException  e){}
-      } else {
-        if (selectedNode.children == null) {
-          if (selectedNode.depth < UCT_TREE_DEPTH) {
-            if (UCT_CREATE_NODE_THRESHOULD <= selectedNode.games) {
-              selectedNode.createNode();
-              selectedNode.isCreateNode = true;
-              score = selectedNode.uctMulti();
+        for (Node child : this.children) {
+            if (child.games == 0) {
+                child.ucb = 9999 + rnd.nextInt(50);
             } else {
-              try{
-                score = runWorkers(selectedNode);
-              }catch(InterruptedException  e){}
+                child.ucb = getUcb(child.score / child.games, games, child.games);
             }
-          } else {
-            try{
-              score = runWorkers(selectedNode);
-            }catch(InterruptedException  e){}
-          }
-        } else {
-          if (selectedNode.depth < UCT_TREE_DEPTH) {
-            score = selectedNode.uctMulti();
-          } else {
-            try{
-              score = runWorkers(selectedNode);
-            }catch(InterruptedException  e){}
-          }
-        }
-      }
-      if (depth == 0) {
-        this.score += score;
-        games += this.children.length;
-      }else{
-        selectedNode.parent.score += score;
-        games += selectedNode.parent.children.length;
-      }
 
-      return score;
+            if (bestUcb < child.ucb) {
+                selectedNode = child;
+                bestUcb = child.ucb;
+            }
+        }
+
+        double score = 0;
+        if (selectedNode.games == 0) {
+            try {
+                score = runWorkers(selectedNode);
+            } catch (InterruptedException e) {
+            }
+        } else {
+            if (selectedNode.children == null) {
+                if (selectedNode.depth < UCT_TREE_DEPTH) {
+                    if (UCT_CREATE_NODE_THRESHOLD <= selectedNode.games) {
+                        selectedNode.createNode();
+                        selectedNode.isCreateNode = true;
+                        score = selectedNode.uctMulti();
+                    } else {
+                        try {
+                            score = runWorkers(selectedNode);
+                        } catch (InterruptedException e) {
+                        }
+                    }
+                } else {
+                    try {
+                        score = runWorkers(selectedNode);
+                    } catch (InterruptedException e) {
+                    }
+                }
+            } else {
+                if (selectedNode.depth < UCT_TREE_DEPTH) {
+                    score = selectedNode.uctMulti();
+                } else {
+                    try {
+                        score = runWorkers(selectedNode);
+                    } catch (InterruptedException e) {
+                    }
+                }
+            }
+        }
+        if (depth == 0) {
+            this.score += score;
+            games += this.children.length;
+        } else {
+            selectedNode.parent.score += score;
+            games += selectedNode.parent.children.length;
+        }
+
+        return score;
     }
 
     /**
@@ -359,7 +375,7 @@ public class Node {
             }
 
             my.add(myActions.get(i));
-            
+
             children[i] =
                     new Node(frameData, this, myActions, oppActions, gameData,
                             playerNumber, commandCenter, my,
@@ -437,10 +453,10 @@ public class Node {
         Map<FieldName, Object> arguments = new HashMap<FieldName, Object>();
         int argIdx = 1;
         LinkedList<Double> features;
-        for (FrameData fd: fds) {
+        for (FrameData fd : fds) {
             // It must be calculated on the user side
             features = fd.getMctsScoringFeatures(!playerNumber);
-            for (Double feature: features) {
+            for (Double feature : features) {
                 arguments.put(FieldName.create('x' + Integer.toString(argIdx)), feature);
                 argIdx++;
             }
@@ -452,31 +468,31 @@ public class Node {
         Map<FieldName, ?> immersionResult = immersionEvaluator.evaluate(arguments);
         Map<FieldName, ?> valenceResult = valenceEvaluator.evaluate(arguments);
 
-        int anxiety = (int)((ProbabilityDistribution)anxietyResult.get(FieldName.create("y"))).getResult();
-        int boredom = (int)((ProbabilityDistribution)boredomResult.get(FieldName.create("y"))).getResult();
-        int challenge = (int)((ProbabilityDistribution)challengeResult.get(FieldName.create("y"))).getResult();
-        int competence = (int)((ProbabilityDistribution)competenceResult.get(FieldName.create("y"))).getResult();
-        int immersion = (int)((ProbabilityDistribution)immersionResult.get(FieldName.create("y"))).getResult();
-        int valence = (int)((ProbabilityDistribution)valenceResult.get(FieldName.create("y"))).getResult();
+        int anxiety = (int) ((ProbabilityDistribution) anxietyResult.get(FieldName.create("y"))).getResult();
+        int boredom = (int) ((ProbabilityDistribution) boredomResult.get(FieldName.create("y"))).getResult();
+        int challenge = (int) ((ProbabilityDistribution) challengeResult.get(FieldName.create("y"))).getResult();
+        int competence = (int) ((ProbabilityDistribution) competenceResult.get(FieldName.create("y"))).getResult();
+        int immersion = (int) ((ProbabilityDistribution) immersionResult.get(FieldName.create("y"))).getResult();
+        int valence = (int) ((ProbabilityDistribution) valenceResult.get(FieldName.create("y"))).getResult();
 //        System.out.println(anxietyResult.get(FieldName.create("probability(0)")).getClass().getName());
         double anxietyScore = anxiety == 1
-                ? -(Double)anxietyResult.get(FieldName.create("probability(1)"))
-                : (Double)anxietyResult.get(FieldName.create("probability(0)"));
+                ? -(Double) anxietyResult.get(FieldName.create("probability(1)"))
+                : (Double) anxietyResult.get(FieldName.create("probability(0)"));
         double boredomScore = boredom == 1
-                ? -(Double)boredomResult.get(FieldName.create("probability(1)"))
-                : (Double)boredomResult.get(FieldName.create("probability(0)"));
+                ? -(Double) boredomResult.get(FieldName.create("probability(1)"))
+                : (Double) boredomResult.get(FieldName.create("probability(0)"));
         double challengeScore = challenge == 1
-                ? -(Double)challengeResult.get(FieldName.create("probability(1)"))
-                : (Double)challengeResult.get(FieldName.create("probability(0)"));
+                ? -(Double) challengeResult.get(FieldName.create("probability(1)"))
+                : (Double) challengeResult.get(FieldName.create("probability(0)"));
         double competenceScore = competence == 1
-                ? (Double)competenceResult.get(FieldName.create("probability(1)"))
-                : -(Double)competenceResult.get(FieldName.create("probability(0)"));
+                ? (Double) competenceResult.get(FieldName.create("probability(1)"))
+                : -(Double) competenceResult.get(FieldName.create("probability(0)"));
         double immersionScore = immersion == 1
-                ? (Double)immersionResult.get(FieldName.create("probability(1)"))
-                : -(Double)immersionResult.get(FieldName.create("probability(0)"));
+                ? (Double) immersionResult.get(FieldName.create("probability(1)"))
+                : -(Double) immersionResult.get(FieldName.create("probability(0)"));
         double valenceScore = valence == 1
-                ? (Double)valenceResult.get(FieldName.create("probability(1)"))
-                : -(Double)valenceResult.get(FieldName.create("probability(0)"));
+                ? (Double) valenceResult.get(FieldName.create("probability(1)"))
+                : -(Double) valenceResult.get(FieldName.create("probability(0)"));
 
         return anxietyScore + boredomScore + challengeScore + competenceScore + immersionScore + valenceScore;
 //        return playerNumber ? (fd.getCharacter(true).getHp() - myOriginalHp) - (fd.getCharacter(false).getHp() - oppOriginalHp) : (fd
@@ -509,29 +525,30 @@ public class Node {
             }
         }
     }
+
     public void addGames() {
-      this.games++;
+        this.games++;
     }
-  
+
     public void setScore(double score) {
-      this.lastestSimulatedScore = 0;
-      this.score += score;
-      this.lastestSimulatedScore = score;
+        this.lastestSimulatedScore = 0;
+        this.score += score;
+        this.lastestSimulatedScore = score;
     }
-  
-    public double runWorkers(Node selectedNode) throws InterruptedException{
-      double score = 0;
-      CountDownLatch countDownLatch = new CountDownLatch(selectedNode.parent.children.length);
-      
-      for (Node child : selectedNode.parent.children) {
-        new Thread(new MultiTheadPlayout(child, countDownLatch)).start();
-      }
-      countDownLatch.await();
-  
-      for (Node child : selectedNode.parent.children) {
-        score += child.lastestSimulatedScore;
-      }
-      return score;
+
+    public double runWorkers(Node selectedNode) throws InterruptedException {
+        double score = 0;
+        CountDownLatch countDownLatch = new CountDownLatch(selectedNode.parent.children.length);
+
+        for (Node child : selectedNode.parent.children) {
+            new Thread(new MultiTheadPlayout(child, countDownLatch)).start();
+        }
+        countDownLatch.await();
+
+        for (Node child : selectedNode.parent.children) {
+            score += child.lastestSimulatedScore;
+        }
+        return score;
     }
 }
 
