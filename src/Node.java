@@ -12,6 +12,10 @@ import aiinterface.CommandCenter;
 
 import enumerate.Action;
 
+//for multi thread control
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+
 /**
  * Node in MCTS
  *
@@ -20,19 +24,19 @@ import enumerate.Action;
 public class Node {
 
   /** UCT execution time */
-  public static final int UCT_TIME = 165 * 100000;
+  public static final int UCT_TIME = 165 * 1000000; //165 * 100000;
 
   /** Value of C in UCB1 */
-  public static final double UCB_C = 1.414;
+  public static final double UCB_C = 3;
 
   /** Depth of tree search */
   public static final int UCT_TREE_DEPTH = 3;
 
   /** Threshold for generating a node */
-  public static final int UCT_CREATE_NODE_THRESHOULD = 20;
+  public static final int UCT_CREATE_NODE_THRESHOULD = 4;
 
   /** Time for performing simulation */
-  public static final int SIMULATION_TIME = 60;
+  public static final int SIMULATION_TIME = 286;
 
   /** Use when in need of random numbers */
   private Random rnd;
@@ -54,6 +58,7 @@ public class Node {
 
   /** Evaluation value */
   private double score;
+  private double lastestSimulatedScore;
 
   /** All selectable actions of self AI */
   private LinkedList<Action> myActions;
@@ -130,10 +135,12 @@ public class Node {
     // Repeat UCT as many times as possible
     long start = System.nanoTime();
     for (; System.nanoTime() - start <= UCT_TIME;) {
-      uct();
+      // uctSingle();
+      uctMulti();
     }
 
     return getBestVisitAction();
+    // return getBestScoreAction();
   }
 
   /**
@@ -151,19 +158,17 @@ public class Node {
       mAction.add(selectedMyActions.get(i));
     }
 
-    for (int i = 0; i < 1 - selectedMyActions.size(); i++) {
+    for (int i = 0; i < 5 - selectedMyActions.size(); i++) {//(int i = 0; i < 5 - selectedMyActions.size(); i++) {
       mAction.add(myActions.get(rnd.nextInt(myActions.size())));
     }
 
-    for (int i = 0; i < 1; i++) {// (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 5; i++) {// (int i = 0; i < 5; i++) {
       oppAction.add(oppActions.get(rnd.nextInt(oppActions.size())));
     }
-
     ArrayList<FrameData> FrameData_arr =
         simulator.simulate(frameData, playerNumber, mAction, oppAction, SIMULATION_TIME, true); // Perform simulation
     
     FrameData nFrameData = FrameData_arr.get(FrameData_arr.size() - 1);
-    
     long afterTime = System.currentTimeMillis();
     // long secDiffTime = (afterTime - beforeTime); //두 시간에 차 계산
     // System.out.println("시간차이(m) : "+secDiffTime);
@@ -175,7 +180,7 @@ public class Node {
    *
    * @return the evaluation value
    */
-  public double uct() {
+  public double uctSingle() {
 
     Node selectedNode = null;
     double bestUcb;
@@ -188,7 +193,6 @@ public class Node {
       } else {
         child.ucb = getUcb(child.score / child.games, games, child.games);
       }
-
 
       if (bestUcb < child.ucb) {
         selectedNode = child;
@@ -206,7 +210,7 @@ public class Node {
           if (UCT_CREATE_NODE_THRESHOULD <= selectedNode.games) {
             selectedNode.createNode();
             selectedNode.isCreateNode = true;
-            score = selectedNode.uct();
+            score = selectedNode.uctSingle();
           } else {
             score = selectedNode.playout();
           }
@@ -215,7 +219,7 @@ public class Node {
         }
       } else {
         if (selectedNode.depth < UCT_TREE_DEPTH) {
-          score = selectedNode.uct();
+          score = selectedNode.uctSingle();
         } else {
           selectedNode.playout();
         }
@@ -228,6 +232,68 @@ public class Node {
 
     if (depth == 0) {
       games++;
+    }
+
+    return score;
+  }
+
+  public double uctMulti() {
+
+    Node selectedNode = null;
+    double bestUcb;
+    bestUcb = -99999;
+
+    for (Node child : this.children) {
+      if (child.games == 0) {
+        child.ucb = 9999 + rnd.nextInt(50);
+      } else {
+        child.ucb = getUcb(child.score / child.games, games, child.games);
+      }
+
+      if (bestUcb < child.ucb) {
+        selectedNode = child;
+        bestUcb = child.ucb;
+      }
+    }
+
+    double score = 0;
+    if (selectedNode.games == 0) {
+      try{
+        score = runWorkers(selectedNode);
+      }catch(InterruptedException  e){}
+    } else {
+      if (selectedNode.children == null) {
+        if (selectedNode.depth < UCT_TREE_DEPTH) {
+          if (UCT_CREATE_NODE_THRESHOULD <= selectedNode.games) {
+            selectedNode.createNode();
+            selectedNode.isCreateNode = true;
+            score = selectedNode.uctMulti();
+          } else {
+            try{
+              score = runWorkers(selectedNode);
+            }catch(InterruptedException  e){}
+          }
+        } else {
+          try{
+            score = runWorkers(selectedNode);
+          }catch(InterruptedException  e){}
+        }
+      } else {
+        if (selectedNode.depth < UCT_TREE_DEPTH) {
+          score = selectedNode.uctMulti();
+        } else {
+          try{
+            score = runWorkers(selectedNode);
+          }catch(InterruptedException  e){}
+        }
+      }
+    }
+    if (depth == 0) {
+      this.score += score;
+      games += this.children.length;
+    }else{
+      selectedNode.parent.score += score;
+      games += selectedNode.parent.children.length;
     }
 
     return score;
@@ -351,6 +417,29 @@ public class Node {
       }
     }
   }
-}
+  public void addGames() {
+    this.games++;
+  }
 
+  public void setScore(double score) {
+    this.lastestSimulatedScore = 0;
+    this.score += score;
+    this.lastestSimulatedScore = score;
+  }
+
+  public double runWorkers(Node selectedNode) throws InterruptedException{
+    double score = 0;
+    CountDownLatch countDownLatch = new CountDownLatch(selectedNode.parent.children.length);
+    
+    for (Node child : selectedNode.parent.children) {
+      new Thread(new MultiTheadPlayout(child, countDownLatch)).start();
+    }
+    countDownLatch.await();
+
+    for (Node child : selectedNode.parent.children) {
+      score += child.lastestSimulatedScore;
+    }
+    return score;
+  }
+}
 // {"mode":"full","isActive":false}
