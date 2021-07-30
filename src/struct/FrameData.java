@@ -1,8 +1,10 @@
 package struct;
 
+import java.util.Arrays;
 import java.util.Deque;
 import java.util.LinkedList;
 
+import fighting.Attack;
 import input.KeyData;
 import setting.FlagSetting;
 import setting.GameSetting;
@@ -249,8 +251,17 @@ public class FrameData {
 	 *
 	 * @return the horizontal distance between P1 and P2
 	 */
-	public int getDistanceX() {
-		return Math.abs((this.characterData[0].getCenterX() - this.characterData[1].getCenterX()));
+	public int getDistanceX(int player, int opponent) {
+		int playerL = characterData[player].getLeft();
+		int playerR = characterData[player].getRight();
+		int opponentL = characterData[opponent].getLeft();
+		int opponentR = characterData[opponent].getRight();
+
+		if (playerL > opponentR || playerR < opponentL) {
+			return Math.min(Math.abs(playerR - opponentL), Math.abs(playerL - opponentR));
+		} else {
+			return 0;
+		}
 	}
 
 	/**
@@ -258,8 +269,167 @@ public class FrameData {
 	 *
 	 * @return the vertical distance between P1 and P2
 	 */
-	public int getDistanceY() {
-		return Math.abs((this.characterData[0].getCenterY() - this.characterData[1].getCenterY()));
+	public int getDistanceY(int player, int opponent) {
+		int playerT = characterData[player].getTop();
+		int playerB = characterData[player].getBottom();
+		int opponentT = characterData[opponent].getTop();
+		int opponentB = characterData[opponent].getBottom();
+
+		int playerAboveBy = opponentT - playerB;
+		int opponentAboveBy = playerT - opponentB;
+
+		if (playerAboveBy > 0) {
+			return playerAboveBy;
+		} else if (opponentAboveBy > 0) {
+			return -opponentAboveBy;
+		} else {
+			return 0;
+		}
 	}
 
+	public int getAttackXDistance(AttackData attack, int target) {
+		int targetL = characterData[target].getLeft();
+		int targetR = characterData[target].getRight();
+		int attackL = attack.getCurrentHitArea().getLeft();
+		int attackR = attack.getCurrentHitArea().getRight();
+
+		return Math.min(Math.abs(targetR - attackL), Math.abs(targetL - attackR));
+	}
+
+	public int getAttackYDistance(AttackData attack, int target) {
+		int targetT = characterData[target].getTop();
+		int targetB = characterData[target].getBottom();
+		int attackT = attack.getCurrentHitArea().getTop();
+		int attackB = attack.getCurrentHitArea().getBottom();
+
+		if ((targetT <= attackT && attackT <= targetB) || (targetT <= attackB && attackB <= targetB)) {
+			return 0;
+		} else {
+			return Math.min(Math.abs(targetT - attackB), Math.abs(attackT - targetB));
+		}
+	}
+
+	public LinkedList<Double> getGameFeatures (int player, int opponent) {
+		LinkedList<Double> features = new LinkedList<Double>();
+		LinkedList<Double> emptyAttackFeatures = new LinkedList<Double>(Arrays.asList(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0));
+		// player features
+		features.add(characterData[player].isFront() ? 1.0 : 0.0);  // self_front
+		features.add((double)characterData[player].getState().ordinal());  // self_state_id
+		features.add((double)characterData[player].getAction().ordinal());  // self_action_id
+		features.add((double)characterData[player].getCenterX());  // self_x
+		features.add((double)characterData[player].getCenterY());  // self_y
+		features.add((double)characterData[player].getSpeedX());  // self_speed_x
+		features.add((double)characterData[player].getSpeedY());  // self_speed_y
+		features.add((double)characterData[player].getRemainingFrame());  // self_remaining_frame
+		features.add((double)characterData[player].getEnergy());  // self_energy
+		features.add((double)characterData[player].getHp());  // self_hp
+		features.add(isTargetApproaching(opponent, player));  // is_self_approaching
+		// player attack features
+		AttackData attack = characterData[player].getAttack();
+		if (attack != null && attack.getAttackType() != 0) {
+			features.add((double)attack.getAttackType());  // self_att_type
+			features.add((double)attack.getSettingSpeedX());  // self_att_speed_x
+			features.add((double)attack.getSettingSpeedY());  // self_att_speed_y
+			features.add((double)attack.getHitDamage());  // self_att_damage
+			features.add((double)attack.getGuardDamage());  // self_att_guard_damage
+			features.add((double)attack.getImpactX());  // self_att_impact_x
+			features.add((double)attack.getImpactY());  // self_att_impact_y
+			features.add((double)getAttackXDistance(attack, opponent));  // self_att_distance_from_oppo_x
+			features.add((double)getAttackYDistance(attack, opponent));  // self_att_distance_from_oppo_y
+		} else {
+			features.addAll(emptyAttackFeatures);
+		}
+		// player projectile features (closest)
+		Deque<AttackData> projectiles = characterData[player].isPlayerNumber() ? getProjectilesByP1() : getProjectilesByP2();
+		if (projectiles.size() > 0) {
+			features.add((double)projectiles.size());  // self_proj_num
+			LinkedList<Double> closestProjFeatures = getClosestProjectile(opponent, projectiles);
+			features.addAll(closestProjFeatures);
+		} else {
+			features.add(0.0);  // self_proj_num
+			features.addAll(emptyAttackFeatures);
+		}
+		return features;
+	}
+
+	public LinkedList<Double> getMctsScoringFeatures (boolean isPlayerP1) {
+		LinkedList<Double> features = new LinkedList<Double>();
+
+		int player;
+		int opponent;
+		if (isPlayerP1) {
+			player = 0;
+			opponent = 1;
+		} else {
+			player = 1;
+			opponent = 0;
+		}
+
+		// common features
+		features.add((double)getDistanceX(player, opponent));  // players_x_distance
+		features.add((double)getDistanceY(player, opponent));  // players_y_distance
+		features.add((double)(characterData[player].getHp() - characterData[opponent].getHp()));  // hp_diff
+
+		// self features
+		features.addAll(getGameFeatures(player, opponent));
+		// oppo features
+		features.addAll(getGameFeatures(opponent, player));
+
+
+		return features;
+	}
+
+	public Double isTargetApproaching(int player, int target) {
+		int playerX = characterData[player].getCenterX();
+		int targetX = characterData[target].getCenterX();
+		int targetSpeedX = characterData[target].getSpeedX();
+
+		if (targetSpeedX  == 0) {
+			return 0.0;
+		} else if (Math.signum((float)(playerX - targetX)) == Math.signum((float)targetSpeedX)) {
+			return 1.0;
+		} else {
+			return -1.0;
+		}
+	}
+
+	public LinkedList<Double> getClosestProjectile(int target, Deque<AttackData> projectiles) {
+		int targetL = characterData[target].getLeft();
+		int targetR = characterData[target].getRight();
+		int targetT = characterData[target].getTop();
+		int targetB = characterData[target].getBottom();
+
+		int closestXDistance = 1000;
+		int closestYDistance = 1000;
+		AttackData closestProjectile = new AttackData();
+
+		for (AttackData projectile: projectiles) {
+			int projL = projectile.getCurrentHitArea().getLeft();
+			int projR = projectile.getCurrentHitArea().getRight();
+			int projT = projectile.getCurrentHitArea().getTop();
+			int projB = projectile.getCurrentHitArea().getBottom();
+			int projDist = Math.min(Math.abs(targetR - projL), Math.abs(targetL - projR));
+			if (projDist < closestXDistance) {
+				if ((targetT <= projB && projB <= targetB) || (targetT <= projT && projT <= targetB)) {
+					closestYDistance = 0;
+				} else {
+					closestYDistance = Math.min(Math.abs(targetT - projB), Math.abs(projT - targetB));
+				}
+				closestXDistance = projDist;
+				closestProjectile = projectile;
+			}
+		}
+		LinkedList<Double> closestProjFeatures = new LinkedList<Double>();
+		closestProjFeatures.add((double)closestProjectile.getAttackType());
+		closestProjFeatures.add((double)closestProjectile.getSpeedX());
+		closestProjFeatures.add((double)closestProjectile.getSpeedY());
+		closestProjFeatures.add((double)closestProjectile.getHitDamage());
+		closestProjFeatures.add((double)closestProjectile.getGuardDamage());
+		closestProjFeatures.add((double)closestProjectile.getImpactX());
+		closestProjFeatures.add((double)closestProjectile.getImpactY());
+		closestProjFeatures.add((double)closestXDistance);
+		closestProjFeatures.add((double)closestYDistance);
+
+		return closestProjFeatures;
+	}
 }
