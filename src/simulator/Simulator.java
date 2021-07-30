@@ -37,19 +37,21 @@ public class Simulator {
 	 */
 	public Simulator(GameData gameData) {
 		this.gameData = gameData;
+		
+    	// Zen action-set http://www.ice.ci.ritsumei.ac.jp/~ftgaic/ZEN_action_animations.htm
 		actionAir =
-        new Action[] {Action.AIR_GUARD, Action.AIR_A, Action.AIR_B, Action.AIR_DA, Action.AIR_DB,
-            Action.AIR_FA, Action.AIR_FB, Action.AIR_UA, Action.AIR_UB, Action.AIR_D_DF_FA,
-            Action.AIR_D_DF_FB, Action.AIR_F_D_DFA, Action.AIR_F_D_DFB, Action.AIR_D_DB_BA,
-            Action.AIR_D_DB_BB};
-    	actionGround =
-        new Action[] {Action.STAND_D_DB_BA, Action.BACK_STEP, Action.FORWARD_WALK, Action.DASH,
-            Action.JUMP, Action.FOR_JUMP, Action.BACK_JUMP, Action.STAND_GUARD,
-            Action.CROUCH_GUARD, Action.THROW_A, Action.THROW_B, Action.STAND_A, Action.STAND_B,
-            Action.CROUCH_A, Action.CROUCH_B, Action.STAND_FA, Action.STAND_FB, Action.CROUCH_FA,
-            Action.CROUCH_FB, Action.STAND_D_DF_FA, Action.STAND_D_DF_FB, Action.STAND_F_D_DFA,
-            Action.STAND_F_D_DFB, Action.STAND_D_DB_BB};
-    	spSkill = Action.STAND_D_DF_FC;
+			new Action[] {Action.AIR_GUARD, Action.AIR_A, Action.AIR_B, Action.AIR_DA, Action.AIR_DB,
+				Action.AIR_FA, Action.AIR_FB, Action.AIR_UA, Action.AIR_UB, Action.AIR_D_DF_FA,
+				Action.AIR_D_DF_FB, Action.AIR_F_D_DFA, Action.AIR_F_D_DFB, Action.AIR_D_DB_BA,
+				Action.AIR_D_DB_BB};
+		actionGround =
+			new Action[] {Action.STAND_D_DB_BA, Action.BACK_STEP, Action.FORWARD_WALK, Action.DASH,
+				Action.JUMP, Action.FOR_JUMP, Action.BACK_JUMP, Action.STAND_GUARD,
+				Action.CROUCH_GUARD, Action.THROW_A, Action.THROW_B, Action.STAND_A, Action.STAND_B,
+				Action.CROUCH_A, Action.CROUCH_B, Action.STAND_FA, Action.STAND_FB, Action.CROUCH_FA,
+				Action.CROUCH_FB, Action.STAND_D_DF_FA, Action.STAND_D_DF_FB, Action.STAND_F_D_DFA,
+				Action.STAND_F_D_DFB, Action.STAND_D_DB_BB};
+		spSkill = Action.STAND_D_DF_FC;
 	}
 
 	/**
@@ -95,12 +97,10 @@ public class Simulator {
 		// Creates deep copy of each action's list
 		LinkedList<Action> myActions = new LinkedList<Action>();
 		LinkedList<Action> oppActions = new LinkedList<Action>();
-		
 		FrameData CurrentSate = frameData;
 		ArrayList<FrameData> LoggedFrameDatas = new ArrayList<FrameData>(simulationLimit);
 
 		Random rnd = new Random();
-
 		ArrayList<Deque<Action>> tempActionList = new ArrayList<Deque<Action>>(2);
 		Deque<Action> tempP1Act = ((playerNumber ? myAct : oppAct) == null) ? null
 				: new LinkedList<Action>(playerNumber ? myAct : oppAct);
@@ -122,8 +122,8 @@ public class Simulator {
 		
 		// for debugging
 		int debug_int = 0;
-
 		int inner_limit = 0;
+
 		if (logging){
 			for (int i = 0; i < simulationLimit; i++) {
 				//select current avalable actions of player
@@ -144,7 +144,9 @@ public class Simulator {
 				simFighting.initialize(tempMotionList, tempActionList, new FrameData(frameData), playerNumber);
 
 				//simulate until sample all player's actions, or player can move, and the number of steps is less than the simulationLimit
-				while ((tempActionList.get((playerNumber ? 0:1)).size() != 0 || !CurrentSate.getCharacter(playerNumber).isControl())&&(inner_limit<=simulationLimit)){
+				while ((tempActionList.get((playerNumber ? 0:1)).size() != 0 
+						|| !CurrentSate.getCharacter(playerNumber).isControl())
+						&&(inner_limit<=simulationLimit)){
 					simFighting.processingFight(nowFrame);
 					//save current state
 					CurrentSate = simFighting.createFrameData(nowFrame, frameData.getRound());

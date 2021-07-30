@@ -103,12 +103,13 @@ public class OurMctsAi implements AIInterface {
 
     simulator = gameData.getSimulator();
 
-    actionAir =
+    // Zen action-set http://www.ice.ci.ritsumei.ac.jp/~ftgaic/ZEN_action_animations.htm
+		actionAir =
         new Action[] {Action.AIR_GUARD, Action.AIR_A, Action.AIR_B, Action.AIR_DA, Action.AIR_DB,
             Action.AIR_FA, Action.AIR_FB, Action.AIR_UA, Action.AIR_UB, Action.AIR_D_DF_FA,
             Action.AIR_D_DF_FB, Action.AIR_F_D_DFA, Action.AIR_F_D_DFB, Action.AIR_D_DB_BA,
             Action.AIR_D_DB_BB};
-    actionGround =
+    	actionGround =
         new Action[] {Action.STAND_D_DB_BA, Action.BACK_STEP, Action.FORWARD_WALK, Action.DASH,
             Action.JUMP, Action.FOR_JUMP, Action.BACK_JUMP, Action.STAND_GUARD,
             Action.CROUCH_GUARD, Action.THROW_A, Action.THROW_B, Action.STAND_A, Action.STAND_B,
