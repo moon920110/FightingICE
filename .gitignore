@@ -50,4 +50,4 @@ debugData
 GAME_LOG
 
 *.pmml
-classes/artifacts/
+classes/artifacts/*
