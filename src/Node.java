@@ -35,7 +35,7 @@ public class Node {
     /**
      * Depth of tree search
      */
-    public static final int UCT_TREE_DEPTH = 3;
+    public static final int UCT_TREE_DEPTH = 2;
 
     /**
      * Threshold for generating a node
@@ -45,7 +45,7 @@ public class Node {
     /**
      * Time for performing simulation
      */
-    public static final int SIMULATION_TIME = 286;
+    public static final int SIMULATION_TIME = 30;
 
     /**
      * Use when in need of random numbers
@@ -129,15 +129,16 @@ public class Node {
 
     Deque<Action> mAction;
     Deque<Action> oppAction;
+    Deque<FrameData> trajectory;
 
     public Node(FrameData frameData, Node parent, LinkedList<Action> myActions,
                 LinkedList<Action> oppActions, GameData gameData, boolean playerNumber,
                 CommandCenter commandCenter, LinkedList<Action> selectedMyActions, Evaluator anxietyEvaluator,
                 Evaluator boredomEvaluator, Evaluator challengeEvaluator, Evaluator competenceEvaluator,
-                Evaluator immersionEvaluator, Evaluator valenceEvaluator) {
+                Evaluator immersionEvaluator, Evaluator valenceEvaluator, Deque<FrameData> trajectory) {
         this(frameData, parent, myActions, oppActions, gameData, playerNumber, commandCenter,
                 anxietyEvaluator, boredomEvaluator, challengeEvaluator,
-                competenceEvaluator, immersionEvaluator, valenceEvaluator);
+                competenceEvaluator, immersionEvaluator, valenceEvaluator, trajectory);
 
         this.selectedMyActions = selectedMyActions;
     }
@@ -146,7 +147,7 @@ public class Node {
                 LinkedList<Action> oppActions, GameData gameData, boolean playerNumber,
                 CommandCenter commandCenter, Evaluator anxietyEvaluator, Evaluator boredomEvaluator,
                 Evaluator challengeEvaluator, Evaluator competenceEvaluator, Evaluator immersionEvaluator,
-                Evaluator valenceEvaluator) {
+                Evaluator valenceEvaluator, Deque<FrameData> trajectory) {
         this.frameData = frameData;
         this.parent = parent;
         this.myActions = myActions;
@@ -161,7 +162,15 @@ public class Node {
         this.competenceEvaluator = competenceEvaluator;
         this.immersionEvaluator = immersionEvaluator;
         this.valenceEvaluator = valenceEvaluator;
+        this.trajectory = trajectory;
 
+        if (this.trajectory.size() < 20) {
+            for (int i = 0; i < 20; i++) {
+                this.trajectory.add(this.frameData);
+            }
+        } else {
+            this.trajectory.add(this.frameData);
+        }
         this.selectedMyActions = new LinkedList<Action>();
 
         this.rnd = new Random();
@@ -189,7 +198,7 @@ public class Node {
         // Repeat UCT as many times as possible
         long start = System.nanoTime();
         for (; System.nanoTime() - start <= UCT_TIME; ) {
-            // uctSingle();
+//             uctSingle();
             uctMulti();
         }
 
@@ -263,7 +272,6 @@ public class Node {
         } else {
             if (selectedNode.children == null) {
                 if (selectedNode.depth < UCT_TREE_DEPTH) {
-                    // 특정 depth 밑의 노드들은 이 부분 때문에 uct 한번도 안 할 수도??
                     if (UCT_CREATE_NODE_THRESHOLD <= selectedNode.games) {
                         selectedNode.createNode();
                         selectedNode.isCreateNode = true;  // for debugging
@@ -380,7 +388,8 @@ public class Node {
                     new Node(frameData, this, myActions, oppActions, gameData,
                             playerNumber, commandCenter, my,
                             anxietyEvaluator, boredomEvaluator, challengeEvaluator,
-                            competenceEvaluator, immersionEvaluator, valenceEvaluator);
+                            competenceEvaluator, immersionEvaluator, valenceEvaluator,
+                            trajectory);
         }
     }
 
@@ -453,7 +462,20 @@ public class Node {
         Map<FieldName, Object> arguments = new HashMap<FieldName, Object>();
         int argIdx = 1;
         LinkedList<Double> features;
-        for (FrameData fd : fds) {
+        Deque<FrameData> trajectory = new LinkedList<FrameData>(this.trajectory){
+            public boolean add(FrameData frameData) {
+                boolean result;
+                if (this.size() >= 20) {
+                    super.removeFirst();
+                }
+                result = super.add(frameData);
+                return result;
+            }
+        };
+        for (FrameData fd: fds) {
+            trajectory.add(fd);
+        }
+        for (FrameData fd : trajectory) {
             // It must be calculated on the user side
             features = fd.getMctsScoringFeatures(!playerNumber);
             for (Double feature : features) {
@@ -474,7 +496,7 @@ public class Node {
         int competence = (int) ((ProbabilityDistribution) competenceResult.get(FieldName.create("y"))).getResult();
         int immersion = (int) ((ProbabilityDistribution) immersionResult.get(FieldName.create("y"))).getResult();
         int valence = (int) ((ProbabilityDistribution) valenceResult.get(FieldName.create("y"))).getResult();
-//        System.out.println(anxietyResult.get(FieldName.create("probability(0)")).getClass().getName());
+
         double anxietyScore = anxiety == 1
                 ? -(Double) anxietyResult.get(FieldName.create("probability(1)"))
                 : (Double) anxietyResult.get(FieldName.create("probability(0)"));
@@ -494,7 +516,7 @@ public class Node {
                 ? (Double) valenceResult.get(FieldName.create("probability(1)"))
                 : -(Double) valenceResult.get(FieldName.create("probability(0)"));
 
-        return anxietyScore + boredomScore + challengeScore + competenceScore + immersionScore + valenceScore;
+        return anxietyScore + challengeScore + competenceScore + immersionScore + valenceScore;
 //        return playerNumber ? (fd.getCharacter(true).getHp() - myOriginalHp) - (fd.getCharacter(false).getHp() - oppOriginalHp) : (fd
 //                .getCharacter(false).getHp() - myOriginalHp) - (fd.getCharacter(true).getHp() - oppOriginalHp);
     }

@@ -6,9 +6,9 @@ import aiinterface.CommandCenter;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Collections;
-import java.util.LinkedList;
+import java.util.*;
 
+import org.dmg.pmml.FieldName;
 import org.dmg.pmml.MiningSchema;
 import org.dmg.pmml.Model;
 import org.jpmml.evaluator.*;
@@ -22,8 +22,6 @@ import struct.Key;
 import struct.MotionData;
 
 import javax.xml.bind.JAXBException;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * AI implementing MCTS
@@ -104,6 +102,8 @@ public class OurMctsAi implements AIInterface {
     private Evaluator immersionEvaluator;
     private Evaluator valenceEvaluator;
 
+    private Deque<FrameData> trajectory;
+
     @Override
     public void close() {
     }
@@ -151,6 +151,17 @@ public class OurMctsAi implements AIInterface {
         immersionEvaluator = getEvaluator(immersionModel);
         valenceEvaluator = getEvaluator(valenceModel);
 
+        trajectory = new LinkedList<FrameData>(){
+            public boolean add(FrameData frameData) {
+                boolean result;
+                if (this.size() >= 20) {
+                    super.removeFirst();
+                }
+                result = super.add(frameData);
+                return result;
+            }
+        };
+
         simulator = gameData.getSimulator();
 
         actionAir =
@@ -192,7 +203,7 @@ public class OurMctsAi implements AIInterface {
                 rootNode =
                         new Node(simulatorAheadFrameData, null, myActions, oppActions, gameData, playerNumber,
                                 commandCenter, anxietyEvaluator, boredomEvaluator, challengeEvaluator,
-                                competenceEvaluator, immersionEvaluator, valenceEvaluator);
+                                competenceEvaluator, immersionEvaluator, valenceEvaluator, trajectory);
                 rootNode.createNode();
 
                 Action bestAction = rootNode.mcts(); // Perform MCTS

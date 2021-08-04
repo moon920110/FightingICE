@@ -51,3 +51,4 @@ GAME_LOG
 
 *.pmml
 classes/artifacts/*
+data/ai/*
