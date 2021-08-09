@@ -207,7 +207,7 @@ public class OurMctsAi implements AIInterface {
                 rootNode.createNode();
 
                 Action bestAction = rootNode.mcts(); // Perform MCTS
-                if (OurMctsAi.DEBUG_MODE) {
+                if (DEBUG_MODE) {
                     rootNode.printNode(rootNode);
                 }
 

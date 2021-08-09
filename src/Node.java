@@ -516,6 +516,7 @@ public class Node {
                 ? (Double) valenceResult.get(FieldName.create("probability(1)"))
                 : -(Double) valenceResult.get(FieldName.create("probability(0)"));
 
+        // Challage + competence / valence + arousal / anxiety + boredom
         return anxietyScore + challengeScore + competenceScore + immersionScore + valenceScore;
 //        return playerNumber ? (fd.getCharacter(true).getHp() - myOriginalHp) - (fd.getCharacter(false).getHp() - oppOriginalHp) : (fd
 //                .getCharacter(false).getHp() - myOriginalHp) - (fd.getCharacter(true).getHp() - oppOriginalHp);
