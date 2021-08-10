@@ -14,6 +14,7 @@ import org.dmg.pmml.Model;
 import org.jpmml.evaluator.*;
 import org.jpmml.evaluator.visitors.DefaultVisitorBattery;
 import org.xml.sax.SAXException;
+import setting.MctsSetting;
 import simulator.Simulator;
 import struct.CharacterData;
 import struct.FrameData;
@@ -88,12 +89,10 @@ public class OurMctsAi implements AIInterface {
      */
     public static final boolean DEBUG_MODE = false;
 
-    private static final File anxietyModel = new File("./data/aiData/OurMcts/Anxiety_Lgb.pmml");
-    private static final File boredomModel = new File("./data/aiData/OurMcts/Boredom_logistic.pmml");
-    private static final File challengeModel = new File("./data/aiData/OurMcts/Challenge_Lgb.pmml");
-    private static final File competenceModel = new File("./data/aiData/OurMcts/Competence_Randomforest.pmml");
-    private static final File immersionModel = new File("./data/aiData/OurMcts/Immersion_Randomforest.pmml");
-    private static final File valenceModel = new File("./data/aiData/OurMcts/Valence_Randomforest.pmml");
+    private static final File challengeModel = new File("D:\\DDA\\dataset\\compressed_fix2\\Challenge-Logistic.pmml");
+    private static final File competenceModel = new File("D:\\DDA\\dataset\\compressed_fix2\\Competence-Randomforest.pmml");
+    private static final File immersionModel = new File("D:\\DDA\\dataset\\compressed_fix2\\Immersion-Randomforest.pmml");
+    private static final File valenceModel = new File("D:\\DDA\\dataset\\compressed_fix2\\Valence-Randomforest.pmml");
 
     private Evaluator anxietyEvaluator;
     private Evaluator boredomEvaluator;
@@ -144,8 +143,6 @@ public class OurMctsAi implements AIInterface {
         this.myActions = new LinkedList<Action>();
         this.oppActions = new LinkedList<Action>();
 
-        anxietyEvaluator = getEvaluator(anxietyModel);
-        boredomEvaluator = getEvaluator(boredomModel);
         challengeEvaluator = getEvaluator(challengeModel);
         competenceEvaluator = getEvaluator(competenceModel);
         immersionEvaluator = getEvaluator(immersionModel);
@@ -154,7 +151,7 @@ public class OurMctsAi implements AIInterface {
         trajectory = new LinkedList<FrameData>(){
             public boolean add(FrameData frameData) {
                 boolean result;
-                if (this.size() >= 20) {
+                if (this.size() >= MctsSetting.TRAJECTORY_CAPACITY) {
                     super.removeFirst();
                 }
                 result = super.add(frameData);
@@ -202,8 +199,8 @@ public class OurMctsAi implements AIInterface {
                 mctsPrepare(); // Some preparation for MCTS
                 rootNode =
                         new Node(simulatorAheadFrameData, null, myActions, oppActions, gameData, playerNumber,
-                                commandCenter, anxietyEvaluator, boredomEvaluator, challengeEvaluator,
-                                competenceEvaluator, immersionEvaluator, valenceEvaluator, trajectory);
+                                commandCenter, challengeEvaluator, competenceEvaluator,
+                                immersionEvaluator, valenceEvaluator, trajectory);
                 rootNode.createNode();
 
                 Action bestAction = rootNode.mcts(); // Perform MCTS

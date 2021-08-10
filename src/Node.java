@@ -1,11 +1,17 @@
+import java.io.BufferedReader;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.IOException;
 import java.util.*;
 
 import org.dmg.pmml.FieldName;
 import org.jpmml.evaluator.*;
+import org.lwjgl.system.CallbackI;
 import simulator.Simulator;
 import struct.CharacterData;
 import struct.FrameData;
 import struct.GameData;
+import setting.MctsSetting;
 
 import aiinterface.CommandCenter;
 
@@ -30,22 +36,22 @@ public class Node {
     /**
      * Value of C in UCB1
      */
-    public static final double UCB_C = 3;
+    public static final double UCB_C = 2 * 1.414;
 
     /**
      * Depth of tree search
      */
-    public static final int UCT_TREE_DEPTH = 2;
+    public static final int UCT_TREE_DEPTH = 5;
 
     /**
      * Threshold for generating a node
      */
-    public static final int UCT_CREATE_NODE_THRESHOLD = 4;
+    public static final int UCT_CREATE_NODE_THRESHOLD = 10;
 
     /**
      * Time for performing simulation
      */
-    public static final int SIMULATION_TIME = 30;
+    public static final int SIMULATION_TIME = 30;  // 0.5sec
 
     /**
      * Use when in need of random numbers
@@ -133,20 +139,20 @@ public class Node {
 
     public Node(FrameData frameData, Node parent, LinkedList<Action> myActions,
                 LinkedList<Action> oppActions, GameData gameData, boolean playerNumber,
-                CommandCenter commandCenter, LinkedList<Action> selectedMyActions, Evaluator anxietyEvaluator,
-                Evaluator boredomEvaluator, Evaluator challengeEvaluator, Evaluator competenceEvaluator,
+                CommandCenter commandCenter, LinkedList<Action> selectedMyActions,
+                Evaluator challengeEvaluator, Evaluator competenceEvaluator,
                 Evaluator immersionEvaluator, Evaluator valenceEvaluator, Deque<FrameData> trajectory) {
         this(frameData, parent, myActions, oppActions, gameData, playerNumber, commandCenter,
-                anxietyEvaluator, boredomEvaluator, challengeEvaluator,
-                competenceEvaluator, immersionEvaluator, valenceEvaluator, trajectory);
+                challengeEvaluator, competenceEvaluator,
+                immersionEvaluator, valenceEvaluator, trajectory);
 
         this.selectedMyActions = selectedMyActions;
     }
 
     public Node(FrameData frameData, Node parent, LinkedList<Action> myActions,
                 LinkedList<Action> oppActions, GameData gameData, boolean playerNumber,
-                CommandCenter commandCenter, Evaluator anxietyEvaluator, Evaluator boredomEvaluator,
-                Evaluator challengeEvaluator, Evaluator competenceEvaluator, Evaluator immersionEvaluator,
+                CommandCenter commandCenter, Evaluator challengeEvaluator,
+                Evaluator competenceEvaluator, Evaluator immersionEvaluator,
                 Evaluator valenceEvaluator, Deque<FrameData> trajectory) {
         this.frameData = frameData;
         this.parent = parent;
@@ -156,16 +162,14 @@ public class Node {
         this.simulator = new Simulator(gameData);
         this.playerNumber = playerNumber;
         this.commandCenter = commandCenter;
-        this.anxietyEvaluator = anxietyEvaluator;
-        this.boredomEvaluator = boredomEvaluator;
         this.challengeEvaluator = challengeEvaluator;
         this.competenceEvaluator = competenceEvaluator;
         this.immersionEvaluator = immersionEvaluator;
         this.valenceEvaluator = valenceEvaluator;
         this.trajectory = trajectory;
 
-        if (this.trajectory.size() < 20) {
-            for (int i = 0; i < 20; i++) {
+        if (this.trajectory.size() < MctsSetting.TRAJECTORY_CAPACITY) {
+            for (int i = 0; i < MctsSetting.TRAJECTORY_CAPACITY; i++) {
                 this.trajectory.add(this.frameData);
             }
         } else {
@@ -387,8 +391,8 @@ public class Node {
             children[i] =
                     new Node(frameData, this, myActions, oppActions, gameData,
                             playerNumber, commandCenter, my,
-                            anxietyEvaluator, boredomEvaluator, challengeEvaluator,
-                            competenceEvaluator, immersionEvaluator, valenceEvaluator,
+                            challengeEvaluator, competenceEvaluator,
+                            immersionEvaluator, valenceEvaluator,
                             trajectory);
         }
     }
@@ -460,12 +464,12 @@ public class Node {
      */
     public double getScore(ArrayList<FrameData> fds) {
         Map<FieldName, Object> arguments = new HashMap<FieldName, Object>();
-        int argIdx = 1;
-        LinkedList<Double> features;
+        FrameData prevFrame = null;
+        long start = System.currentTimeMillis();
         Deque<FrameData> trajectory = new LinkedList<FrameData>(this.trajectory){
             public boolean add(FrameData frameData) {
                 boolean result;
-                if (this.size() >= 20) {
+                if (this.size() >= MctsSetting.TRAJECTORY_CAPACITY) {
                     super.removeFirst();
                 }
                 result = super.add(frameData);
@@ -475,34 +479,26 @@ public class Node {
         for (FrameData fd: fds) {
             trajectory.add(fd);
         }
+        for (String name: MctsSetting.ARGUMENT_NAMES) {
+            arguments.put(FieldName.create(name), 0.0);
+        }
         for (FrameData fd : trajectory) {
             // It must be calculated on the user side
-            features = fd.getMctsScoringFeatures(!playerNumber);
-            for (Double feature : features) {
-                arguments.put(FieldName.create('x' + Integer.toString(argIdx)), feature);
-                argIdx++;
-            }
+            arguments = fd.getMctsScoringFeatures(!playerNumber, arguments, prevFrame);
+            prevFrame = fd;
         }
-        Map<FieldName, ?> anxietyResult = anxietyEvaluator.evaluate(arguments);
-        Map<FieldName, ?> boredomResult = boredomEvaluator.evaluate(arguments);
+        arguments = normalizeArguments(arguments);
+
         Map<FieldName, ?> challengeResult = challengeEvaluator.evaluate(arguments);
         Map<FieldName, ?> competenceResult = competenceEvaluator.evaluate(arguments);
         Map<FieldName, ?> immersionResult = immersionEvaluator.evaluate(arguments);
         Map<FieldName, ?> valenceResult = valenceEvaluator.evaluate(arguments);
 
-        int anxiety = (int) ((ProbabilityDistribution) anxietyResult.get(FieldName.create("y"))).getResult();
-        int boredom = (int) ((ProbabilityDistribution) boredomResult.get(FieldName.create("y"))).getResult();
-        int challenge = (int) ((ProbabilityDistribution) challengeResult.get(FieldName.create("y"))).getResult();
-        int competence = (int) ((ProbabilityDistribution) competenceResult.get(FieldName.create("y"))).getResult();
-        int immersion = (int) ((ProbabilityDistribution) immersionResult.get(FieldName.create("y"))).getResult();
-        int valence = (int) ((ProbabilityDistribution) valenceResult.get(FieldName.create("y"))).getResult();
+        int challenge = (int) ((ProbabilityDistribution) challengeResult.get(FieldName.create("Ch_rank"))).getResult();
+        int competence = (int) ((ProbabilityDistribution) competenceResult.get(FieldName.create("Co_rank"))).getResult();
+        int immersion = (int) ((ProbabilityDistribution) immersionResult.get(FieldName.create("Im_rank"))).getResult();
+        int valence = (int) ((ProbabilityDistribution) valenceResult.get(FieldName.create("Va_rank"))).getResult();
 
-        double anxietyScore = anxiety == 1
-                ? -(Double) anxietyResult.get(FieldName.create("probability(1)"))
-                : (Double) anxietyResult.get(FieldName.create("probability(0)"));
-        double boredomScore = boredom == 1
-                ? -(Double) boredomResult.get(FieldName.create("probability(1)"))
-                : (Double) boredomResult.get(FieldName.create("probability(0)"));
         double challengeScore = challenge == 1
                 ? -(Double) challengeResult.get(FieldName.create("probability(1)"))
                 : (Double) challengeResult.get(FieldName.create("probability(0)"));
@@ -516,10 +512,7 @@ public class Node {
                 ? (Double) valenceResult.get(FieldName.create("probability(1)"))
                 : -(Double) valenceResult.get(FieldName.create("probability(0)"));
 
-        // Challage + competence / valence + arousal / anxiety + boredom
-        return anxietyScore + challengeScore + competenceScore + immersionScore + valenceScore;
-//        return playerNumber ? (fd.getCharacter(true).getHp() - myOriginalHp) - (fd.getCharacter(false).getHp() - oppOriginalHp) : (fd
-//                .getCharacter(false).getHp() - myOriginalHp) - (fd.getCharacter(true).getHp() - oppOriginalHp);
+        return valenceScore;// challengeScore + competenceScore + immersionScore + valenceScore;
     }
 
     /**
@@ -572,6 +565,143 @@ public class Node {
             score += child.lastestSimulatedScore;
         }
         return score;
+    }
+
+    public Map<FieldName, Object> normalizeArguments(Map<FieldName, Object> arguments) {
+        Map<String, Double> maxDict = new HashMap<>();
+        Map<String, Double> minDict = new HashMap<>();
+        try {
+            BufferedReader csvReader = new BufferedReader(new FileReader(MctsSetting.MIN_MAX_PATH));
+            String line;
+            String titles[] = new String[179];
+            int row = 0;
+            while ((line = csvReader.readLine()) != null) {
+                if (row == 0) {
+                    titles = line.split(",");
+                } else if (row == 1) {
+                    String values[] = line.split(",");
+                    for (int i = 1; i < titles.length; i++) {
+                        maxDict.put(titles[i], Double.parseDouble(values[i]));
+                    }
+                } else {
+                    String values[] = line.split(",");
+                    for (int i = 1; i < titles.length; i++) {
+                        minDict.put(titles[i], Double.parseDouble(values[i]));
+                    }
+                }
+                row++;
+            }
+            csvReader.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        // init count variables
+        double totalFrameCnt = 300.;
+        double sec = 5.;
+        double selfAppCnt = (double) arguments.get(FieldName.create("self_approaching_ratio"));
+        double selfMACnt =  (double) arguments.get(FieldName.create("self_moving_away_ratio"));
+        double oppoAppCnt = (double) arguments.get(FieldName.create("oppo_approaching_ratio"));
+        double oppoMACnt = (double) arguments.get(FieldName.create("oppo_approaching_ratio"));
+        double selfMovingCnt = selfAppCnt + selfMACnt;
+        double oppoMovingCnt = oppoAppCnt + oppoMACnt;
+        double selfAttCnt = 0, oppoAttCnt = 0, selfProjCnt = 0, oppoProjCnt = 0;
+        for (int i = 1; i < 5; i++) {
+            selfAttCnt += (double) arguments.get(FieldName.create(String.format("self_attack_type%d_ratio", i)));
+            oppoAttCnt += (double) arguments.get(FieldName.create(String.format("oppo_attack_type%d_ratio", i)));
+            selfProjCnt += (double) arguments.get(FieldName.create(String.format("self_projectiles_type%d_ratio", i)));
+            oppoProjCnt += (double) arguments.get(FieldName.create(String.format("oppo_projectiles_type%d_ratio", i)));
+        }
+        for (String argName: MctsSetting.ARGUMENT_NAMES) {
+            if (argName.equals("self_approaching_ratio") || argName.equals("self_moving_away_ratio")){
+                if (selfMovingCnt > 0) {
+                    arguments = replaceArguments(arguments, argName, selfMovingCnt);
+                }
+            } else if (argName.equals("oppo_approaching_ratio") || argName.equals("oppo_moving_away_ratio")) {
+                if (oppoMovingCnt > 0) {
+                    arguments = replaceArguments(arguments, argName, oppoMovingCnt);
+                }
+            } else if (argName.equals("self_avg_approaching_speed")) {
+                if (selfAppCnt > 0) {
+                    arguments = replaceArguments(arguments, argName, selfAppCnt);
+                }
+            } else if (argName.equals("self_avg_moving_away_speed")) {
+                if (selfMACnt > 0) {
+                    arguments = replaceArguments(arguments, argName, selfMACnt);
+                }
+            } else if (argName.equals("oppo_avg_approaching_speed")) {
+                if (oppoAppCnt > 0) {
+                    arguments = replaceArguments(arguments, argName, oppoAppCnt);
+                }
+            } else if (argName.equals("oppo_avg_moving_away_speed")) {
+                if (oppoMACnt > 0) {
+                    arguments = replaceArguments(arguments, argName, oppoMACnt);
+                }
+            } else if (argName.equals("self_attack_type1_ratio")
+                    || argName.equals("self_attack_type2_ratio")
+                    || argName.equals("self_attack_type3_ratio")
+                    || argName.equals("self_attack_type4_ratio")
+                    || argName.equals("self_attack_avg_damage")) {
+                if (selfAttCnt > 0) {
+                    arguments = replaceArguments(arguments, argName, selfAttCnt);
+                }
+            } else if (argName.equals("oppo_attack_type1_ratio")
+                    || argName.equals("oppo_attack_type2_ratio")
+                    || argName.equals("oppo_attack_type3_ratio")
+                    || argName.equals("oppo_attack_type4_ratio")
+                    || argName.equals("oppo_attack_avg_damage")) {
+                if (oppoAttCnt > 0) {
+                    arguments = replaceArguments(arguments, argName, oppoAttCnt);
+                }
+            } else if (argName.equals("self_projectiles_type1_ratio")
+                    || argName.equals("self_projectiles_type2_ratio")
+                    || argName.equals("self_projectiles_type3_ratio")
+                    || argName.equals("self_projectiles_type4_ratio")
+                    || argName.equals("self_projectiles_avg_damage")
+                    || argName.equals("self_avg_projectiles_num")) {
+                if (selfProjCnt > 0) {
+                    arguments = replaceArguments(arguments, argName, selfProjCnt);
+                }
+            } else if (argName.equals("oppo_projectiles_type1_ratio")
+                    || argName.equals("oppo_projectiles_type2_ratio")
+                    || argName.equals("oppo_projectiles_type3_ratio")
+                    || argName.equals("oppo_projectiles_type4_ratio")
+                    || argName.equals("oppo_projectiles_avg_damage")
+                    || argName.equals("oppo_avg_projectiles_num")) {
+                if (oppoProjCnt > 0) {
+                    arguments = replaceArguments(arguments, argName, oppoProjCnt);
+                }
+            } else if (argName.equals("self_be_hit_per_second")
+                    || argName.equals("self_hit_per_second")
+                    || argName.equals("self_guard_per_second")
+                    || argName.equals("self_blocked_per_second")
+                    || argName.equals("avg_hp_zero_crossing")
+                    || argName.equals("avg_self_hp_reducing_speed")
+                    || argName.equals("avg_oppo_hp_reducing_speed")
+                    || argName.equals("avg_self_energy_gaining_speed")
+                    || argName.equals("avg_oppo_energy_gaining_speed")
+                    || argName.equals("avg_self_energy_reducing_speed")
+                    || argName.equals("avg_oppo_energy_reducing_speed")) {
+                arguments = replaceArguments(arguments, argName, sec);
+            } else {
+                arguments = replaceArguments(arguments, argName, totalFrameCnt);
+            }
+            FieldName fn = FieldName.create(argName);
+            double v = (double) arguments.get(fn);
+            // (v - min) / (max - min)
+            if (maxDict.get(argName) != 0) {
+                arguments.replace(fn, (v - minDict.get(argName)) / (maxDict.get(argName) - minDict.get(argName)));
+            }
+        }
+
+        return arguments;
+    }
+
+    public Map<FieldName, Object> replaceArguments(Map<FieldName, Object> arguments, String name, double divider) {
+        FieldName fieldName = FieldName.create(name);
+        double v = (double) arguments.get(fieldName);
+        arguments.replace(fieldName, v / divider);
+        return arguments;
     }
 }
 

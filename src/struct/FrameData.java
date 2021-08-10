@@ -1,13 +1,14 @@
 package struct;
 
-import java.util.Arrays;
-import java.util.Deque;
-import java.util.LinkedList;
+import java.util.*;
 
 import fighting.Attack;
 import input.KeyData;
+import org.dmg.pmml.Field;
+import org.dmg.pmml.FieldName;
 import setting.FlagSetting;
 import setting.GameSetting;
+import setting.MctsSetting;
 
 /**
  * The class dealing with the information in the game such as the current frame
@@ -309,54 +310,12 @@ public class FrameData {
 		}
 	}
 
-	public LinkedList<Double> getGameFeatures (int player, int opponent) {
-		LinkedList<Double> features = new LinkedList<Double>();
-		LinkedList<Double> emptyAttackFeatures = new LinkedList<Double>(Arrays.asList(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0));
-		// player features
-		features.add(characterData[player].isFront() ? 1.0 : 0.0);  // self_front
-		features.add((double)characterData[player].getState().ordinal());  // self_state_id
-		features.add((double)characterData[player].getAction().ordinal());  // self_action_id
-		features.add((double)characterData[player].getCenterX());  // self_x
-		features.add((double)characterData[player].getCenterY());  // self_y
-		features.add((double)characterData[player].getSpeedX());  // self_speed_x
-		features.add((double)characterData[player].getSpeedY());  // self_speed_y
-		features.add((double)characterData[player].getRemainingFrame());  // self_remaining_frame
-		features.add((double)characterData[player].getEnergy());  // self_energy
-		features.add((double)characterData[player].getHp());  // self_hp
-		features.add(isTargetApproaching(opponent, player));  // is_self_approaching
-		// player attack features
-		AttackData attack = characterData[player].getAttack();
-		if (attack != null && attack.getAttackType() != 0) {
-			features.add((double)attack.getAttackType());  // self_att_type
-			features.add((double)attack.getSettingSpeedX());  // self_att_speed_x
-			features.add((double)attack.getSettingSpeedY());  // self_att_speed_y
-			features.add((double)attack.getHitDamage());  // self_att_damage
-			features.add((double)attack.getGuardDamage());  // self_att_guard_damage
-			features.add((double)attack.getImpactX());  // self_att_impact_x
-			features.add((double)attack.getImpactY());  // self_att_impact_y
-			features.add((double)getAttackXDistance(attack, opponent));  // self_att_distance_from_oppo_x
-			features.add((double)getAttackYDistance(attack, opponent));  // self_att_distance_from_oppo_y
-		} else {
-			features.addAll(emptyAttackFeatures);
-		}
-		// player projectile features (closest)
-		Deque<AttackData> projectiles = characterData[player].isPlayerNumber() ? getProjectilesByP1() : getProjectilesByP2();
-		if (projectiles.size() > 0) {
-			features.add((double)projectiles.size());  // self_proj_num
-			LinkedList<Double> closestProjFeatures = getClosestProjectile(opponent, projectiles);
-			features.addAll(closestProjFeatures);
-		} else {
-			features.add(0.0);  // self_proj_num
-			features.addAll(emptyAttackFeatures);
-		}
-		return features;
-	}
-
-	public LinkedList<Double> getMctsScoringFeatures (boolean isPlayerP1) {
-		LinkedList<Double> features = new LinkedList<Double>();
-
+	public Map<FieldName, Object> getMctsScoringFeatures (
+			boolean isPlayerP1, Map<FieldName, Object> arguments, FrameData prevFrame) {
 		int player;
 		int opponent;
+		FieldName fieldName;
+		double value;
 		if (isPlayerP1) {
 			player = 0;
 			opponent = 1;
@@ -364,19 +323,182 @@ public class FrameData {
 			player = 1;
 			opponent = 0;
 		}
+		int selfX = characterData[player].getCenterX();
+		int oppoX = characterData[opponent].getCenterX();
 
-		// common features
-		features.add((double)getDistanceX(player, opponent));  // players_x_distance
-		features.add((double)getDistanceY(player, opponent));  // players_y_distance
-		features.add((double)(characterData[player].getHp() - characterData[opponent].getHp()));  // hp_diff
+		// Cumulate time spent count in bin_n
+		for (int i = 0; i < 5; i++) {
+			if (192 * i <= selfX && selfX < 192 * (i + 1)) {
+			    arguments = replaceArgument(arguments, String.format("self_time_spent_in_bin%d", i));
+			}
+			if (192 * i <= oppoX && oppoX < 192 * (i + 1)) {
+				arguments = replaceArgument(arguments, String.format("oppo_time_spent_in_bin%d", i));
+			}
+		}
+		// Cumulate close distance (under 100) count
+		double distance = (double) getDistanceX(player, opponent);
+		if (distance < 100) {
+			arguments = replaceArgument(arguments, "close_distance_ratio");
+		}
+		// Cumulate distance values
+		arguments = replaceArgument(arguments, "avg_distance", distance);
+		// Cumulate approaching and moving away count of self & oppo
+        double selfApproaching = isTargetApproaching(opponent, player);
+        double oppoApproaching = isTargetApproaching(player, opponent);
+        if (selfApproaching == 1) {
+			arguments = replaceArgument(arguments, "self_approaching_ratio");
+			arguments = replaceArgument(
+					arguments,
+					"self_avg_approaching_speed",
+					Math.abs((double) characterData[player].getSpeedX())
+			);
+		} else if (selfApproaching == -1) {
+			arguments = replaceArgument(arguments, "self_moving_away_ratio");
+			arguments = replaceArgument(
+					arguments,
+					"self_avg_moving_away_speed",
+					- Math.abs((double) characterData[player].getSpeedX())
+			);
+		}
+        if (oppoApproaching == 1) {
+			arguments = replaceArgument(arguments, "oppo_approaching_ratio");
+			arguments = replaceArgument(
+					arguments,
+					"oppo_avg_approaching_speed",
+					Math.abs((double) characterData[opponent].getSpeedX())
+			);
+		} else if (oppoApproaching == -1) {
+			arguments = replaceArgument(arguments, "oppo_moving_away_ratio");
+			arguments = replaceArgument(
+					arguments,
+					"oppo_avg_moving_away_speed",
+					- Math.abs((double) characterData[opponent].getSpeedX())
+			);
+		}
+        // Cumulate action and state count
+        int selfAction = characterData[player].getAction().ordinal();
+        int selfState = characterData[player].getState().ordinal();
+        int oppoAction = characterData[opponent].getAction().ordinal();
+        int oppoState = characterData[opponent].getState().ordinal();
+        arguments = replaceArgument(arguments, String.format("self_action%d_ratio", selfAction));
+		arguments = replaceArgument(arguments, String.format("self_state%d_ratio", selfState));
+		arguments = replaceArgument(arguments, String.format("oppo_action%d_ratio", oppoAction));
+		arguments = replaceArgument(arguments, String.format("oppo_state%d_ratio", oppoState));
+		// Cumulate attack type count of self & oppo and attack count and attack damage
+		AttackData selfAttack = characterData[player].getAttack();
+		AttackData oppoAttack = characterData[opponent].getAttack();
+		if (selfAttack != null && selfAttack.getAttackType() != 0) {
+		    int attType = selfAttack.getAttackType();
+		    arguments = replaceArgument(arguments, String.format("self_attack_type%d_ratio", attType));
+		    arguments = replaceArgument(arguments, "self_attack_ratio");
+			arguments = replaceArgument(arguments, "self_attack_avg_damage", (double) selfAttack.getHitDamage());
+		}
+		if (oppoAttack != null && oppoAttack.getAttackType() != 0) {
+			int attType = oppoAttack.getAttackType();
+			arguments = replaceArgument(arguments, String.format("oppo_attack_type%d_ratio", attType));
+			arguments = replaceArgument(arguments, "oppo_attack_ratio");
+			arguments = replaceArgument(arguments, "oppo_attack_avg_damage", (double) oppoAttack.getHitDamage());
+		}
+		// Cumulate projectiles data
+		Deque<AttackData> selfProjectiles = characterData[player].isPlayerNumber() ? getProjectilesByP1() : getProjectilesByP2();
+		if (selfProjectiles.size() > 0) {
+			AttackData selfProj = getClosestProjectile(opponent, selfProjectiles);
+			int selfProjType = selfProj.getAttackType();
+			if (selfProjType > 0) {
+				arguments = replaceArgument(arguments, String.format("self_projectiles_type%d_ratio", selfProjType));
+				arguments = replaceArgument(arguments, "self_projectiles_ratio");
+				arguments = replaceArgument(arguments, "self_projectiles_avg_damage", (double) selfProj.getHitDamage());
+			}
+			arguments = replaceArgument(arguments, "self_avg_projectiles_num", (double)selfProjectiles.size());
+		}
+		Deque<AttackData> oppoProjectiles = characterData[opponent].isPlayerNumber() ? getProjectilesByP1() : getProjectilesByP2();
+		if (oppoProjectiles.size() > 0) {
+			AttackData oppoProj = getClosestProjectile(player, oppoProjectiles);
+			int oppoProjType = oppoProj.getAttackType();
+			if (oppoProjType > 0) {
+				arguments = replaceArgument(arguments, String.format("oppo_projectiles_type%d_ratio", oppoProjType));
+				arguments = replaceArgument(arguments, "oppo_projectiles_ratio");
+				arguments = replaceArgument(arguments, "oppo_projectiles_avg_damage", (double) oppoProj.getHitDamage());
+			}
+			arguments = replaceArgument(arguments, "oppo_avg_projectiles_num", (double)oppoProjectiles.size());
+		}
+		// Cumulate hit / be hit / blocked / guard data
+		if (prevFrame != null) {
+			int selfHpDiff = characterData[player].getHp() - prevFrame.characterData[player].getHp();
+			int oppoHpDiff = characterData[opponent].getHp() - prevFrame.characterData[opponent].getHp();
+			if (selfHpDiff < 0) {
+				Deque<AttackData> prevOppoProjectiles = prevFrame.characterData[opponent].isPlayerNumber()
+						? prevFrame.getProjectilesByP1() : prevFrame.getProjectilesByP2();
+				AttackData prevOppoProj = prevFrame.getClosestProjectile(player, prevOppoProjectiles);
+				int oppoAttackHitDamage = prevFrame.characterData[opponent].getAttack().getHitDamage();
+				int oppoProjHitDamage = prevOppoProj.getHitDamage();
 
-		// self features
-		features.addAll(getGameFeatures(player, opponent));
-		// oppo features
-		features.addAll(getGameFeatures(opponent, player));
+				if (-1 * selfHpDiff == oppoAttackHitDamage || -1 * selfHpDiff == oppoProjHitDamage) {
+					arguments = replaceArgument(arguments, "self_be_hit_per_second");
+				} else {
+					arguments = replaceArgument(arguments, "self_guard_per_second");
+				}
+			}
+			if (oppoHpDiff < 0) {
+				Deque<AttackData> prevSelfProjectiles = prevFrame.characterData[player]	.isPlayerNumber()
+						? prevFrame.getProjectilesByP1() : prevFrame.getProjectilesByP2();
+				AttackData prevSelfProj = prevFrame.getClosestProjectile(opponent, prevSelfProjectiles);
+				int selfAttackHitDamage = prevFrame.characterData[player].getAttack().getHitDamage();
+				int selfProjHitDamage = prevSelfProj.getHitDamage();
 
+				if (-1 * oppoHpDiff == selfAttackHitDamage || -1 * oppoHpDiff == selfProjHitDamage) {
+					arguments = replaceArgument(arguments, "self_hit_per_second");
+				} else {
+					arguments = replaceArgument(arguments, "self_blocked_per_second");
+				}
+			}
+		}
+		// Cumulate hp data
+		int hpDiff = characterData[player].getHp() - characterData[opponent].getHp();
+		arguments = replaceArgument(arguments, "avg_hp_diff", hpDiff);
+		if (hpDiff < 0) {
+			arguments = replaceArgument(arguments, "oppo_hp_sup_ratio");
+		} else if (hpDiff > 0) {
+			arguments = replaceArgument(arguments, "self_hp_sup_ratio");
+		}
+		if (prevFrame != null) {
+			int prevHpDiff = prevFrame.characterData[player].getHp() - prevFrame.characterData[opponent].getHp();
+			if (Integer.signum(hpDiff) == Integer.signum(prevHpDiff)) {
+				arguments = replaceArgument(arguments, "avg_hp_zero_crossing");
+			}
+			int selfHpDiff = characterData[player].getHp() - prevFrame.characterData[player].getHp();
+			int oppoHpDiff = characterData[opponent].getHp() - prevFrame.characterData[opponent].getHp();
+			arguments = replaceArgument(arguments, "avg_self_hp_reducing_speed", selfHpDiff);
+			arguments = replaceArgument(arguments, "avg_oppo_hp_reducing_speed", oppoHpDiff);
+			int selfEnergyDiff = characterData[player].getEnergy() - prevFrame.characterData[player].getEnergy();
+			int oppoEnergyDiff = characterData[opponent].getEnergy() - prevFrame.characterData[opponent].getEnergy();
+			if (selfEnergyDiff < 0) {
+				arguments = replaceArgument(arguments, "avg_self_energy_reducing_speed", selfEnergyDiff);
+			} else {
+				arguments = replaceArgument(arguments, "avg_self_energy_gaining_speed", selfEnergyDiff);
+			}
+			if (oppoEnergyDiff < 0) {
+				arguments = replaceArgument(arguments, "avg_oppo_energy_reducing_speed", oppoEnergyDiff);
+			} else {
+				arguments = replaceArgument(arguments, "avg_oppo_energy_gaining_speed", oppoEnergyDiff);
+			}
+		}
 
-		return features;
+		return arguments;
+	}
+
+	public Map<FieldName, Object> replaceArgument(Map<FieldName, Object> arguments, String name) {
+		FieldName fieldName = FieldName.create(name);
+		double value = (double) arguments.get(fieldName);
+		arguments.replace(fieldName, value + 1);
+		return arguments;
+	}
+
+	public Map<FieldName, Object> replaceArgument(Map<FieldName, Object> arguments, String name, double v) {
+		FieldName fieldName = FieldName.create(name);
+		double value = (double) arguments.get(fieldName);
+		arguments.replace(fieldName, value + v);
+		return arguments;
 	}
 
 	public Double isTargetApproaching(int player, int target) {
@@ -393,7 +515,7 @@ public class FrameData {
 		}
 	}
 
-	public LinkedList<Double> getClosestProjectile(int target, Deque<AttackData> projectiles) {
+	public AttackData getClosestProjectile(int target, Deque<AttackData> projectiles) {
 		int targetL = characterData[target].getLeft();
 		int targetR = characterData[target].getRight();
 		int targetT = characterData[target].getTop();
@@ -419,17 +541,17 @@ public class FrameData {
 				closestProjectile = projectile;
 			}
 		}
-		LinkedList<Double> closestProjFeatures = new LinkedList<Double>();
-		closestProjFeatures.add((double)closestProjectile.getAttackType());
-		closestProjFeatures.add((double)closestProjectile.getSpeedX());
-		closestProjFeatures.add((double)closestProjectile.getSpeedY());
-		closestProjFeatures.add((double)closestProjectile.getHitDamage());
-		closestProjFeatures.add((double)closestProjectile.getGuardDamage());
-		closestProjFeatures.add((double)closestProjectile.getImpactX());
-		closestProjFeatures.add((double)closestProjectile.getImpactY());
-		closestProjFeatures.add((double)closestXDistance);
-		closestProjFeatures.add((double)closestYDistance);
+//		LinkedList<Double> closestProjFeatures = new LinkedList<Double>();
+//		closestProjFeatures.add((double)closestProjectile.getAttackType());
+//		closestProjFeatures.add((double)closestProjectile.getSpeedX());
+//		closestProjFeatures.add((double)closestProjectile.getSpeedY());
+//		closestProjFeatures.add((double)closestProjectile.getHitDamage());
+//		closestProjFeatures.add((double)closestProjectile.getGuardDamage());
+//		closestProjFeatures.add((double)closestProjectile.getImpactX());
+//		closestProjFeatures.add((double)closestProjectile.getImpactY());
+//		closestProjFeatures.add((double)closestXDistance);
+//		closestProjFeatures.add((double)closestYDistance);
 
-		return closestProjFeatures;
+		return closestProjectile;
 	}
 }

@@ -149,9 +149,7 @@ public class Simulator {
 					simFighting.processingFight(nowFrame);
 					//save current state
 					CurrentSate = simFighting.createFrameData(nowFrame, frameData.getRound());
-					if ((inner_limit + 1) % 15 == 0){
-						LoggedFrameData.add(CurrentSate);
-					}
+					LoggedFrameData.add(CurrentSate);
 
 					nowFrame++;
 					inner_limit++;
