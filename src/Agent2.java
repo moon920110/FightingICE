@@ -1,16 +1,7 @@
-import enumerate.Action;
-import enumerate.State;
-
 import aiinterface.AIInterface;
 import aiinterface.CommandCenter;
-
-import java.io.File;
-import java.io.IOException;
-import java.util.*;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-
-import org.dmg.pmml.FieldName;
+import enumerate.Action;
+import enumerate.State;
 import org.dmg.pmml.MiningSchema;
 import org.dmg.pmml.Model;
 import org.jpmml.evaluator.*;
@@ -18,19 +9,21 @@ import org.jpmml.evaluator.visitors.DefaultVisitorBattery;
 import org.xml.sax.SAXException;
 import simulator.Simulator;
 import struct.CharacterData;
-import struct.FrameData;
-import struct.GameData;
-import struct.Key;
-import struct.MotionData;
+import struct.*;
 
 import javax.xml.bind.JAXBException;
+import java.io.File;
+import java.io.IOException;
+import java.util.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * AI implementing MCTS
  *
  * @author Taichi Miyazaki
  */
-public class OurMctsAi implements AIInterface {
+public class Agent2 implements AIInterface {
 
     private Simulator simulator;
     private Key key;
@@ -201,9 +194,9 @@ public class OurMctsAi implements AIInterface {
 
                 mctsPrepare(); // Some preparation for MCTS
                 rootNode =
-                        new Node(simulatorAheadFrameData, null, myActions, oppActions, gameData, playerNumber,
-                                commandCenter, challengeEvaluator,
-                                competenceEvaluator, immersionEvaluator, valenceEvaluator, trajectory);
+                        new Node2(simulatorAheadFrameData, null, myActions, oppActions, gameData, playerNumber,
+                                commandCenter, challengeEvaluator, competenceEvaluator,
+                                immersionEvaluator, valenceEvaluator, trajectory);
                 rootNode.createNode();
 
                 Action bestAction = rootNode.mcts(executorService); // Perform MCTS

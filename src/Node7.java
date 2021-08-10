@@ -1,17 +1,14 @@
-import java.util.*;
-
+import aiinterface.CommandCenter;
+import enumerate.Action;
 import org.dmg.pmml.FieldName;
-import org.jpmml.evaluator.*;
+import org.jpmml.evaluator.Evaluator;
+import org.jpmml.evaluator.ProbabilityDistribution;
 import simulator.Simulator;
 import struct.CharacterData;
 import struct.FrameData;
 import struct.GameData;
 
-import aiinterface.CommandCenter;
-
-import enumerate.Action;
-
-//for multi thread control
+import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 
@@ -20,7 +17,7 @@ import java.util.concurrent.ExecutorService;
  *
  * @author Taichi Miyazaki
  */
-public class Node {
+public class Node7 extends Node{
 
     /**
      * UCT execution time
@@ -55,12 +52,12 @@ public class Node {
     /**
      * Parent node
      */
-    private Node parent;
+    private Node7 parent;
 
     /**
      * Child node
      */
-    private Node[] children;
+    private Node7[] children;
 
     /**
      * Node depth
@@ -129,11 +126,11 @@ public class Node {
     Deque<Action> oppAction;
     Deque<FrameData> trajectory;
 
-    public Node(FrameData frameData, Node parent, LinkedList<Action> myActions,
-                LinkedList<Action> oppActions, GameData gameData, boolean playerNumber,
-                CommandCenter commandCenter, LinkedList<Action> selectedMyActions,
-                Evaluator challengeEvaluator, Evaluator competenceEvaluator,
-                Evaluator immersionEvaluator, Evaluator valenceEvaluator, Deque<FrameData> trajectory) {
+    public Node7(FrameData frameData, Node7 parent, LinkedList<Action> myActions,
+                 LinkedList<Action> oppActions, GameData gameData, boolean playerNumber,
+                 CommandCenter commandCenter, LinkedList<Action> selectedMyActions,
+                 Evaluator challengeEvaluator, Evaluator competenceEvaluator,
+                 Evaluator immersionEvaluator, Evaluator valenceEvaluator, Deque<FrameData> trajectory) {
         this(frameData, parent, myActions, oppActions, gameData, playerNumber, commandCenter,
                 challengeEvaluator, competenceEvaluator,
                 immersionEvaluator, valenceEvaluator, trajectory);
@@ -141,11 +138,14 @@ public class Node {
         this.selectedMyActions = selectedMyActions;
     }
 
-    public Node(FrameData frameData, Node parent, LinkedList<Action> myActions,
-                LinkedList<Action> oppActions, GameData gameData, boolean playerNumber,
-                CommandCenter commandCenter, Evaluator challengeEvaluator,
-                Evaluator competenceEvaluator, Evaluator immersionEvaluator,
-                Evaluator valenceEvaluator, Deque<FrameData> trajectory) {
+    public Node7(FrameData frameData, Node7 parent, LinkedList<Action> myActions,
+                 LinkedList<Action> oppActions, GameData gameData, boolean playerNumber,
+                 CommandCenter commandCenter, Evaluator challengeEvaluator,
+                 Evaluator competenceEvaluator, Evaluator immersionEvaluator,
+                 Evaluator valenceEvaluator, Deque<FrameData> trajectory) {
+        super(frameData, parent, myActions, oppActions, gameData, playerNumber,
+                commandCenter, challengeEvaluator,
+                competenceEvaluator, immersionEvaluator, valenceEvaluator, trajectory);
         this.frameData = frameData;
         this.parent = parent;
         this.myActions = myActions;
@@ -242,12 +242,12 @@ public class Node {
      */
     public double uctSingle() {
 
-        Node selectedNode = null;
+        Node7 selectedNode = null;
         double bestUcb;
 
         bestUcb = -99999;
 
-        for (Node child : this.children) {
+        for (Node7 child : this.children) {
             if (child.games == 0) {
                 child.ucb = 9999 + rnd.nextInt(50);
             } else {
@@ -300,11 +300,11 @@ public class Node {
 
     public double uctMulti(ExecutorService executorService) {
 
-        Node selectedNode = null;
+        Node7 selectedNode = null;
         double bestUcb;
         bestUcb = -99999;
 
-        for (Node child : this.children) {
+        for (Node7 child : this.children) {
             if (child.games == 0) {
                 child.ucb = 9999 + rnd.nextInt(50);
             } else {
@@ -369,7 +369,7 @@ public class Node {
      */
     public void createNode() {
 
-        this.children = new Node[myActions.size()];
+        this.children = new Node7[myActions.size()];
 
         for (int i = 0; i < children.length; i++) {
 
@@ -381,7 +381,7 @@ public class Node {
             my.add(myActions.get(i));
 
             children[i] =
-                    new Node(frameData, this, myActions, oppActions, gameData,
+                    new Node7(frameData, this, myActions, oppActions, gameData,
                             playerNumber, commandCenter, my,
                             challengeEvaluator, competenceEvaluator,
                             immersionEvaluator, valenceEvaluator, trajectory);
@@ -431,7 +431,7 @@ public class Node {
 
         for (int i = 0; i < children.length; i++) {
 
-            System.out.println("Evaluation value:" + children[i].score / children[i].games + ",Number of trials:"
+            System.out.println("[Node7]" + "Evaluation value:" + children[i].score / children[i].games + ",Number of trials:"
                     + children[i].games + ",ucb:" + children[i].ucb + ",Action:" + myActions.get(i));
 
             double meanScore = children[i].score / children[i].games;
@@ -529,7 +529,7 @@ public class Node {
         return score + UCB_C * Math.sqrt((2 * Math.log(n)) / ni);
     }
 
-    public void printNode(Node node) {
+    public void printNode(Node7 node) {
         System.out.println("Total number of trails:" + node.games);
         for (int i = 0; i < node.children.length; i++) {
             System.out.println(i + ",Trails:" + node.children[i].games + ",Depth:" + node.children[i].depth
@@ -554,16 +554,16 @@ public class Node {
         this.lastestSimulatedScore = score;
     }
 
-    public double runWorkers(Node selectedNode, ExecutorService executorService) throws InterruptedException {
+    public double runWorkers(Node7 selectedNode, ExecutorService executorService) throws InterruptedException {
         double score = 0;
         CountDownLatch countDownLatch = new CountDownLatch(selectedNode.parent.children.length);
 
-        for (Node child : selectedNode.parent.children) {
+        for (Node7 child : selectedNode.parent.children) {
             executorService.execute(new MultiTheadPlayout(child, countDownLatch));
         }
         countDownLatch.await();
 
-        for (Node child : selectedNode.parent.children) {
+        for (Node7 child : selectedNode.parent.children) {
             score += child.lastestSimulatedScore;
         }
         return score;

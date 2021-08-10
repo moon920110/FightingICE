@@ -1,17 +1,14 @@
-import java.util.*;
-
+import aiinterface.CommandCenter;
+import enumerate.Action;
 import org.dmg.pmml.FieldName;
-import org.jpmml.evaluator.*;
+import org.jpmml.evaluator.Evaluator;
+import org.jpmml.evaluator.ProbabilityDistribution;
 import simulator.Simulator;
 import struct.CharacterData;
 import struct.FrameData;
 import struct.GameData;
 
-import aiinterface.CommandCenter;
-
-import enumerate.Action;
-
-//for multi thread control
+import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 
@@ -20,7 +17,7 @@ import java.util.concurrent.ExecutorService;
  *
  * @author Taichi Miyazaki
  */
-public class Node {
+public class Node2 extends Node{
 
     /**
      * UCT execution time
@@ -55,12 +52,12 @@ public class Node {
     /**
      * Parent node
      */
-    private Node parent;
+    private Node2 parent;
 
     /**
      * Child node
      */
-    private Node[] children;
+    private Node2[] children;
 
     /**
      * Node depth
@@ -129,11 +126,11 @@ public class Node {
     Deque<Action> oppAction;
     Deque<FrameData> trajectory;
 
-    public Node(FrameData frameData, Node parent, LinkedList<Action> myActions,
-                LinkedList<Action> oppActions, GameData gameData, boolean playerNumber,
-                CommandCenter commandCenter, LinkedList<Action> selectedMyActions,
-                Evaluator challengeEvaluator, Evaluator competenceEvaluator,
-                Evaluator immersionEvaluator, Evaluator valenceEvaluator, Deque<FrameData> trajectory) {
+    public Node2(FrameData frameData, Node2 parent, LinkedList<Action> myActions,
+                 LinkedList<Action> oppActions, GameData gameData, boolean playerNumber,
+                 CommandCenter commandCenter, LinkedList<Action> selectedMyActions,
+                 Evaluator challengeEvaluator, Evaluator competenceEvaluator,
+                 Evaluator immersionEvaluator, Evaluator valenceEvaluator, Deque<FrameData> trajectory) {
         this(frameData, parent, myActions, oppActions, gameData, playerNumber, commandCenter,
                 challengeEvaluator, competenceEvaluator,
                 immersionEvaluator, valenceEvaluator, trajectory);
@@ -141,11 +138,14 @@ public class Node {
         this.selectedMyActions = selectedMyActions;
     }
 
-    public Node(FrameData frameData, Node parent, LinkedList<Action> myActions,
-                LinkedList<Action> oppActions, GameData gameData, boolean playerNumber,
-                CommandCenter commandCenter, Evaluator challengeEvaluator,
-                Evaluator competenceEvaluator, Evaluator immersionEvaluator,
-                Evaluator valenceEvaluator, Deque<FrameData> trajectory) {
+    public Node2(FrameData frameData, Node2 parent, LinkedList<Action> myActions,
+                 LinkedList<Action> oppActions, GameData gameData, boolean playerNumber,
+                 CommandCenter commandCenter, Evaluator challengeEvaluator,
+                 Evaluator competenceEvaluator, Evaluator immersionEvaluator,
+                 Evaluator valenceEvaluator, Deque<FrameData> trajectory) {
+        super(frameData, parent, myActions, oppActions, gameData, playerNumber,
+                commandCenter, challengeEvaluator,
+                competenceEvaluator, immersionEvaluator, valenceEvaluator, trajectory);
         this.frameData = frameData;
         this.parent = parent;
         this.myActions = myActions;
@@ -242,12 +242,12 @@ public class Node {
      */
     public double uctSingle() {
 
-        Node selectedNode = null;
+        Node2 selectedNode = null;
         double bestUcb;
 
         bestUcb = -99999;
 
-        for (Node child : this.children) {
+        for (Node2 child : this.children) {
             if (child.games == 0) {
                 child.ucb = 9999 + rnd.nextInt(50);
             } else {
@@ -300,11 +300,11 @@ public class Node {
 
     public double uctMulti(ExecutorService executorService) {
 
-        Node selectedNode = null;
+        Node2 selectedNode = null;
         double bestUcb;
         bestUcb = -99999;
 
-        for (Node child : this.children) {
+        for (Node2 child : this.children) {
             if (child.games == 0) {
                 child.ucb = 9999 + rnd.nextInt(50);
             } else {
@@ -369,7 +369,7 @@ public class Node {
      */
     public void createNode() {
 
-        this.children = new Node[myActions.size()];
+        this.children = new Node2[myActions.size()];
 
         for (int i = 0; i < children.length; i++) {
 
@@ -381,7 +381,7 @@ public class Node {
             my.add(myActions.get(i));
 
             children[i] =
-                    new Node(frameData, this, myActions, oppActions, gameData,
+                    new Node2(frameData, this, myActions, oppActions, gameData,
                             playerNumber, commandCenter, my,
                             challengeEvaluator, competenceEvaluator,
                             immersionEvaluator, valenceEvaluator, trajectory);
@@ -431,7 +431,7 @@ public class Node {
 
         for (int i = 0; i < children.length; i++) {
 
-            System.out.println("Evaluation value:" + children[i].score / children[i].games + ",Number of trials:"
+            System.out.println("[Node2]" + "Evaluation value:" + children[i].score / children[i].games + ",Number of trials:"
                     + children[i].games + ",ucb:" + children[i].ucb + ",Action:" + myActions.get(i));
 
             double meanScore = children[i].score / children[i].games;
@@ -480,17 +480,17 @@ public class Node {
         }
 //        Map<FieldName, ?> anxietyResult = anxietyEvaluator.evaluate(arguments);
 //        Map<FieldName, ?> boredomResult = boredomEvaluator.evaluate(arguments);
-//        Map<FieldName, ?> challengeResult = challengeEvaluator.evaluate(arguments);
+        Map<FieldName, ?> challengeResult = challengeEvaluator.evaluate(arguments);
 //        Map<FieldName, ?> competenceResult = competenceEvaluator.evaluate(arguments);
 //        Map<FieldName, ?> immersionResult = immersionEvaluator.evaluate(arguments);
-        Map<FieldName, ?> valenceResult = valenceEvaluator.evaluate(arguments);
+//        Map<FieldName, ?> valenceResult = valenceEvaluator.evaluate(arguments);
 
 //        int anxiety = (int) ((ProbabilityDistribution) anxietyResult.get(FieldName.create("y"))).getResult();
 //        int boredom = (int) ((ProbabilityDistribution) boredomResult.get(FieldName.create("y"))).getResult();
-//        int challenge = (int) ((ProbabilityDistribution) challengeResult.get(FieldName.create("y"))).getResult();
+        int challenge = (int) ((ProbabilityDistribution) challengeResult.get(FieldName.create("y"))).getResult();
 //        int competence = (int) ((ProbabilityDistribution) competenceResult.get(FieldName.create("y"))).getResult();
 //        int immersion = (int) ((ProbabilityDistribution) immersionResult.get(FieldName.create("y"))).getResult();
-        int valence = (int) ((ProbabilityDistribution) valenceResult.get(FieldName.create("y"))).getResult();
+//        int valence = (int) ((ProbabilityDistribution) valenceResult.get(FieldName.create("y"))).getResult();
 
 //        double anxietyScore = anxiety == 1
 //                ? -(Double) anxietyResult.get(FieldName.create("probability(1)"))
@@ -498,21 +498,21 @@ public class Node {
 //        double boredomScore = boredom == 1
 //                ? -(Double) boredomResult.get(FieldName.create("probability(1)"))
 //                : (Double) boredomResult.get(FieldName.create("probability(0)"));
-//        double challengeScore = challenge == 1
-//                ? -(Double) challengeResult.get(FieldName.create("probability(1)"))
-//                : (Double) challengeResult.get(FieldName.create("probability(0)"));
+        double challengeScore = challenge == 1
+                ? -(Double) challengeResult.get(FieldName.create("probability(1)"))
+                : (Double) challengeResult.get(FieldName.create("probability(0)"));
 //        double competenceScore = competence == 1
 //                ? (Double) competenceResult.get(FieldName.create("probability(1)"))
 //                : -(Double) competenceResult.get(FieldName.create("probability(0)"));
 //        double immersionScore = immersion == 1
 //                ? (Double) immersionResult.get(FieldName.create("probability(1)"))
 //                : -(Double) immersionResult.get(FieldName.create("probability(0)"));
-        double valenceScore = valence == 1
-                ? (Double) valenceResult.get(FieldName.create("probability(1)"))
-                : -(Double) valenceResult.get(FieldName.create("probability(0)"));
+//        double valenceScore = valence == 1
+//                ? (Double) valenceResult.get(FieldName.create("probability(1)"))
+//                : -(Double) valenceResult.get(FieldName.create("probability(0)"));
 
         // Challage + competence / valence + arousal / anxiety + boredom
-        return -valenceScore;
+        return -challengeScore;
 //        return playerNumber ? (fd.getCharacter(true).getHp() - myOriginalHp) - (fd.getCharacter(false).getHp() - oppOriginalHp) : (fd
 //                .getCharacter(false).getHp() - myOriginalHp) - (fd.getCharacter(true).getHp() - oppOriginalHp);
     }
@@ -529,7 +529,7 @@ public class Node {
         return score + UCB_C * Math.sqrt((2 * Math.log(n)) / ni);
     }
 
-    public void printNode(Node node) {
+    public void printNode(Node2 node) {
         System.out.println("Total number of trails:" + node.games);
         for (int i = 0; i < node.children.length; i++) {
             System.out.println(i + ",Trails:" + node.children[i].games + ",Depth:" + node.children[i].depth
@@ -554,16 +554,16 @@ public class Node {
         this.lastestSimulatedScore = score;
     }
 
-    public double runWorkers(Node selectedNode, ExecutorService executorService) throws InterruptedException {
+    public double runWorkers(Node2 selectedNode, ExecutorService executorService) throws InterruptedException {
         double score = 0;
         CountDownLatch countDownLatch = new CountDownLatch(selectedNode.parent.children.length);
 
-        for (Node child : selectedNode.parent.children) {
+        for (Node2 child : selectedNode.parent.children) {
             executorService.execute(new MultiTheadPlayout(child, countDownLatch));
         }
         countDownLatch.await();
 
-        for (Node child : selectedNode.parent.children) {
+        for (Node2 child : selectedNode.parent.children) {
             score += child.lastestSimulatedScore;
         }
         return score;
